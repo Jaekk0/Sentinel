@@ -1,0 +1,271 @@
+{
+  "version": "Notebook/1.0",
+  "items": [
+    {
+      "type": 1,
+      "content": {
+        "json": "## Azure AD guests\n---\n\nThis workbook is based on learning sentinel.blog: https://learnsentinel.blog/2021/11/04/keep-an-eye-on-your-azure-ad-guests-with-microsoft-sentinel/amp/"
+      },
+      "name": "text - 2"
+    },
+    {
+      "type": 9,
+      "content": {
+        "version": "KqlParameterItem/1.0",
+        "parameters": [
+          {
+            "id": "020de58b-73ca-47fe-838e-bc3ac7afaef6",
+            "version": "KqlParameterItem/1.0",
+            "name": "TimeRange",
+            "type": 4,
+            "isRequired": true,
+            "value": {
+              "durationMs": 2592000000
+            },
+            "typeSettings": {
+              "selectableValues": [
+                {
+                  "durationMs": 300000
+                },
+                {
+                  "durationMs": 900000
+                },
+                {
+                  "durationMs": 1800000
+                },
+                {
+                  "durationMs": 3600000
+                },
+                {
+                  "durationMs": 14400000
+                },
+                {
+                  "durationMs": 43200000
+                },
+                {
+                  "durationMs": 86400000
+                },
+                {
+                  "durationMs": 172800000
+                },
+                {
+                  "durationMs": 259200000
+                },
+                {
+                  "durationMs": 604800000
+                },
+                {
+                  "durationMs": 1209600000
+                },
+                {
+                  "durationMs": 2419200000
+                },
+                {
+                  "durationMs": 2592000000
+                },
+                {
+                  "durationMs": 5184000000
+                },
+                {
+                  "durationMs": 7776000000
+                }
+              ],
+              "allowCustom": true
+            }
+          }
+        ],
+        "style": "above",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "parameters - 7"
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "//Lists guests who have been invited but not yet redeemed their invites. Excludes newly invited guests (last 30 days).\nlet timerange=180d;\nlet timeframe=30d;\nAuditLogs\n| where TimeGenerated between (ago(timerange) .. ago(timeframe)) \n| where OperationName == \"Invite external user\"\n| extend GuestUPN = tolower(tostring(TargetResources[0].userPrincipalName))\n| project TimeGenerated, GuestUPN\n| join kind=leftanti  (\n    AuditLogs\n    | where TimeGenerated > ago (timerange)\n    | where OperationName == \"Redeem external user invite\"\n    | where CorrelationId <> \"00000000-0000-0000-0000-000000000000\"\n    | extend d = tolower(tostring(TargetResources[0].displayName))\n    | parse d with * \"upn: \" GuestUPN \",\" *\n    | project TimeGenerated, GuestUPN)\n    on GuestUPN\n| distinct GuestUPN",
+        "size": 1,
+        "title": "Lists guests who have been invited but not yet redeemed their invites. Excludes newly invited guests (last 30 days).",
+        "timeContext": {
+          "durationMs": 2592000000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "customWidth": "50",
+      "name": "Lists guests who have been invited but not yet redeemed their invites. Excludes newly invited guests (last 30 days).",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "//Creates a list of your applications and summarizes successful signins by members vs guests\r\nlet timerange=30d;\r\nSigninLogs\r\n| where TimeGenerated > ago(timerange)\r\n| project TimeGenerated, UserType, ResultType, AppDisplayName\r\n| where ResultType == 0\r\n| summarize\r\n    MemberSignins=countif(UserType == \"Member\"),\r\n    GuestSignins=countif(UserType == \"Guest\")\r\n    by AppDisplayName\r\n| sort by AppDisplayName  ",
+        "size": 0,
+        "title": "Creates a list of your applications and summarizes successful signins by members vs guests",
+        "timeContext": {
+          "durationMs": 2592000000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces",
+        "gridSettings": {
+          "sortBy": [
+            {
+              "itemKey": "MemberSignins",
+              "sortOrder": 1
+            }
+          ]
+        },
+        "sortBy": [
+          {
+            "itemKey": "MemberSignins",
+            "sortOrder": 1
+          }
+        ]
+      },
+      "customWidth": "50",
+      "name": "Creates a list of your applications and summarizes successful signins by members vs guests",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "let timerange=180d;\r\nlet timeframe=30d;\r\nSigninLogs\r\n| where TimeGenerated > ago(timerange)\r\n| where UserType == \"Guest\" or UserPrincipalName contains \"#ext#\"\r\n| where ResultType == 0\r\n| summarize arg_max(TimeGenerated, *) by UserPrincipalName\r\n| join kind = leftanti  \r\n    (\r\n    SigninLogs\r\n    | where TimeGenerated > ago(timeframe)\r\n    | where UserType == \"Guest\" or UserPrincipalName contains \"#ext#\"\r\n    | where ResultType == 0\r\n    | summarize arg_max(TimeGenerated, *) by UserPrincipalName\r\n    )\r\n    on UserPrincipalName\r\n| project UserPrincipalName",
+        "size": 0,
+        "title": "Users haven’t signed in over the last month, having signed in successfully in the preceding 6 months. (Fixed - TimeRange)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "customWidth": "50",
+      "name": "Users haven’t signed in over the last month, having signed in successfully in the preceding 6 months",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "//Month by month breakdown of when your Azure AD guests last signed in\r\nSigninLogs\r\n| where TimeGenerated > ago (360d)\r\n| where UserType == \"Guest\" or UserPrincipalName contains \"#ext#\"\r\n| where ResultType == 0\r\n| summarize arg_max(TimeGenerated, *) by UserPrincipalName\r\n| project TimeGenerated, UserPrincipalName\r\n| summarize InactiveUsers=make_set(UserPrincipalName) by startofmonth(TimeGenerated)",
+        "size": 0,
+        "title": "Month by month breakdown of when your Azure AD guests last signed in. (Fixed - TimeRange)",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "customWidth": "50",
+      "name": "Month by month breakdown of when your Azure AD guests last signed in",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "SigninLogs\r\n| where UserType == \"Guest\"\r\n| where ResultType == \"50105\"\r\n| project TimeGenerated, UserPrincipalName, AppDisplayName, IPAddress, Location, UserAgent",
+        "size": 0,
+        "title": "Guests accounts that are trying to access your applications but being denied because they aren’t assigned a role",
+        "timeContext": {
+          "durationMs": 2592000000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "name": "Guests accounts that are trying to access your applications but being denied because they aren’t assigned a role",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "IdentityInfo\r\n| where TimeGenerated > ago(21d)\r\n| summarize arg_max(TimeGenerated, *) by AccountUPN\r\n| where UserType == \"Guest\"\r\n| where AssignedRoles != \"[]\" \r\n| where isnotempty(AssignedRoles)\r\n| project AccountUPN, AssignedRoles, AccountObjectId",
+        "size": 0,
+        "title": "Find any guests that have been assigned Azure AD roles",
+        "timeContext": {
+          "durationMs": 2592000000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "customWidth": "50",
+      "name": "Find any guests that have been assigned Azure AD roles",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "//Summarize the total count and the list of files downloaded by guests in your Office 365 tenant\r\nlet timeframe=30d;\r\nIdentityInfo\r\n| where TimeGenerated > ago(21d)\r\n| where UserType == \"Guest\"\r\n| summarize arg_max(TimeGenerated, *) by AccountUPN\r\n| project UserId=tolower(AccountUPN)\r\n| join kind=inner (\r\n    OfficeActivity\r\n    | where TimeGenerated > ago(timeframe)\r\n    | where Operation in (\"FileSyncDownloadedFull\", \"FileDownloaded\")\r\n    )\r\n    on UserId\r\n| summarize DownloadCount=count(), DownloadList=make_set(OfficeObjectId) by UserId",
+        "size": 0,
+        "title": "Summarize the total count and the list of files downloaded by guests in your Office 365 tenant",
+        "timeContext": {
+          "durationMs": 2592000000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "customWidth": "50",
+      "name": "Summarize the total count and the list of files downloaded by guests in your Office 365 tenant",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "//Summarize the total count of files downloaded by each guest domain in your tenant\r\nlet timeframe=30d;\r\nIdentityInfo\r\n| where TimeGenerated > ago(21d)\r\n| where UserType == \"Guest\"\r\n| summarize arg_max(TimeGenerated, *) by AccountUPN\r\n| project UserId=tolower(AccountUPN)\r\n| join kind=inner (\r\n    OfficeActivity\r\n    | where TimeGenerated > ago(timeframe)\r\n    | where Operation in (\"FileSyncDownloadedFull\", \"FileDownloaded\")\r\n    )\r\n    on UserId\r\n| extend username = tostring(split(UserId,\"#\")[0])\r\n| extend userdomain = tostring(split(username,\"_\")[1])\r\n| summarize count() by userdomain",
+        "size": 0,
+        "title": "Summarize the total count of files downloaded by each guest domain in your tenant",
+        "timeContext": {
+          "durationMs": 2592000000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "customWidth": "40",
+      "name": "Summarize the total count of files downloaded by each guest domain in your tenant",
+      "styleSettings": {
+        "showBorder": true
+      }
+    },
+    {
+      "type": 3,
+      "content": {
+        "version": "KqlItem/1.0",
+        "query": "// Finds guest accounts who were added to a Team and then downloaded documents straight away. \r\n// startime = data to look back on, timeframe = looks for downloads for this period after being added to the Team\r\nlet starttime = 7d;\r\nlet timeframe = 2h;\r\nlet operations = dynamic([\"FileSyncDownloadedFull\", \"FileDownloaded\"]);\r\nOfficeActivity\r\n| where TimeGenerated > ago(starttime)\r\n| where OfficeWorkload == \"MicrosoftTeams\" \r\n| where Operation == \"MemberAdded\"\r\n| extend UserAdded = tostring(parse_json(Members)[0].UPN)\r\n| where UserAdded contains (\"#EXT#\")\r\n| project TimeAdded=TimeGenerated, UserId=tolower(UserAdded)\r\n| join kind=inner\r\n    (\r\n    OfficeActivity\r\n    | where Operation in (['operations'])\r\n    )\r\n    on UserId\r\n| project DownloadTime=TimeGenerated, TimeAdded, SourceFileName, UserId\r\n| where (DownloadTime - TimeAdded) between (0min .. timeframe)",
+        "size": 0,
+        "title": "Finds guest accounts who were added to a Team and then downloaded documents straight away",
+        "timeContext": {
+          "durationMs": 2592000000
+        },
+        "timeContextFromParameter": "TimeRange",
+        "queryType": 0,
+        "resourceType": "microsoft.operationalinsights/workspaces"
+      },
+      "customWidth": "60",
+      "name": "Finds guest accounts who were added to a Team and then downloaded documents straight away",
+      "styleSettings": {
+        "showBorder": true
+      }
+    }
+  ],
+  "fromTemplateId": "sentinel",
+  "$schema": "https://github.com/Microsoft/Application-Insights-Workbooks/blob/master/schema/workbook.json"
+}
