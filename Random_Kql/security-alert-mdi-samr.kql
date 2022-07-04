@@ -1,0 +1,6 @@
+//Discover devices that have made most User and group membership reconnaissance (SAMR) alerts in your environment last 90 days
+SecurityAlert
+| where AlertName has "User and group membership reconnaissance (SAMR)"
+| where TimeGenerated > ago(90d)
+| extend Source_Computer = extract("\\bAn actor on(\\s+\\S+)", 1, Description)
+| summarize count() by Source_Computer
