@@ -2,5 +2,16 @@
 SecurityAlert
 | where AlertName has "User and group membership reconnaissance (SAMR)"
 | where TimeGenerated > ago(90d)
-| extend Source_Computer = extract("\\bAn actor on(\\s+\\S+)", 1, Description)
+| extend Source_Computer = extract("\\bon(\\s+\\S+)", 1, Description)
 | summarize count() by Source_Computer
+
+
+//Discover devices that have made most User and group membership reconnaissance (SAMR) alerts in your environment last 90 days
+//This query adds destination computer to results
+SecurityAlert
+| where AlertName has "User and group membership reconnaissance (SAMR)"
+| where TimeGenerated > ago(90d)
+| extend Source_Computer = extract("\\bon(\\s+\\S+)", 1, Description)
+// Destination field is not always visible on the description field if there is multiple destination 
+| extend Dst_Computer = extract("\\bto(\\s+\\S+)", 1, Description)
+| summarize count() by Source_Computer, Dst_Computer
