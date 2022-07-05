@@ -1,4 +1,4 @@
-//Find client devices that have triggered "Communication with suspicious random domain name" alerts from Defender for Cloud
+//Find client devices(Microsoft Defender for Endpoint) that have triggered "Communication with suspicious random domain name" alerts from Defender for Cloud
 //Original idea from: https://github.com/reprise99/Sentinel-Queries/blob/da7b7b5dcb8516049461440c5a2766948e984cd5/DNS/DNS-FindDevicesThatHaveQueriedSuspiciousDomains.kql
 let dns=
 SecurityAlert
