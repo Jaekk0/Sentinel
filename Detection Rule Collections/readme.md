@@ -1,6 +1,35 @@
-Detection rule collections 
+<h1>Detection rule collections</h1>
 
 These Analytics rule collections can be used to quickly deploy multiple threat detection rules to new or demo environments. Be cautious when deploying these to production environments. These are only rule templates that need to be parametrized to environment needs.
+
+List of Detection rules per .json file:
+
+<table>
+   <thead>
+      <tr>
+         <th>Name</th>
+         <th>Json filename</th>
+	 <th>Rule count</th>
+      </tr>
+   </thead>
+   <tbody>
+      <tr>
+         <td>Aws</td>
+         <td>ms-sentinel-aws-detection-rules-14022023</td>
+	 <td>52 rules</td>
+      </tr>
+      <tr>
+         <td></td>
+         <td></td>
+	 <td></td>
+      </tr>
+      <tr>
+         <td></td>
+         <td></td>
+	 <td></td>
+      </tr>      
+   </tbody>
+</table>
 
 You can import these Sentinel analytics rule packs to your environment.
 ![image](https://user-images.githubusercontent.com/81473026/218717311-8462ebcf-79aa-4806-8f8a-cb668e5d7366.png)
@@ -15,3 +44,4 @@ Default all the rules will be in state "Disabled".
 </ol>
 	
 ![image](https://user-images.githubusercontent.com/81473026/218717484-b42845c0-ea28-4508-8ac3-2d27435272d6.png)
+
