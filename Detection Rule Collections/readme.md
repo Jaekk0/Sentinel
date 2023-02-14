@@ -1,6 +1,8 @@
 <h1>Detection rule collections</h1>
 
-These Analytics rule collections can be used to quickly deploy multiple threat detection rules to new or demo environments. Be cautious when deploying these to production environments. These are only rule templates that need to be parametrized to environment needs.
+These Analytics rule collections can be used to quickly deploy multiple threat detection rules to new or demo environments. Be cautious when deploying these to production environments. These are rule templates that need to be parametrized to environment needs. These templates and .json files are based on default rule collection of Sentinel solution. Individual detection rules can be also found directly in Sentinel github page: https://github.com/Azure/Azure-Sentinel/tree/master/Detections 
+
+<br/><br/>
 
 List of Detection rules per .json file:
 
@@ -30,6 +32,9 @@ List of Detection rules per .json file:
       </tr>      
    </tbody>
 </table>
+
+<br/><br/>
+<br/><br/>
 
 You can import these Sentinel analytics rule packs to your environment.
 ![image](https://user-images.githubusercontent.com/81473026/218717311-8462ebcf-79aa-4806-8f8a-cb668e5d7366.png)
