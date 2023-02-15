@@ -1,0 +1,1087 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/7d640985-4815-432b-81b8-d3b3bdbd0c34')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/7d640985-4815-432b-81b8-d3b3bdbd0c34')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "Azure VM Run Command operation executed during suspicious login window",
+                "description": "Identifies when the Azure Run Command operation is executed by a UserPrincipalName and IP Address  \nthat has resulted in a recent user entity behaviour alert.",
+                "severity": "High",
+                "enabled": false,
+                "query": "AzureActivity\n// Isolate run command actions\n| where OperationNameValue =~ \"MICROSOFT.COMPUTE/VIRTUALMACHINES/RUNCOMMAND/ACTION\"\n// Confirm that the operation impacted a virtual machine\n| where Authorization has \"virtualMachines\"\n// Each runcommand operation consists of three events when successful, Started, Accepted (or Rejected), Successful (or Failed).\n| summarize StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), max(CallerIpAddress), make_list(ActivityStatusValue) by CorrelationId, Authorization, Caller\n// Limit to Run Command executions that Succeeded\n| where list_ActivityStatusValue has_any (\"Success\", \"Succeeded\")\n// Extract data from the Authorization field\n| extend Authorization_d = parse_json(Authorization)\n| extend Scope = Authorization_d.scope\n| extend Scope_s = split(Scope, \"/\")\n| extend Subscription = tostring(Scope_s[2])\n| extend VirtualMachineName = tostring(Scope_s[-1])\n| project StartTime, EndTime, Subscription, VirtualMachineName, CorrelationId, Caller, CallerIpAddress=max_CallerIpAddress\n// Create a join key using  the Caller (UPN)\n| extend joinkey = tolower(Caller)\n// Join the Run Command actions to UEBA data\n| join kind = inner (\n    BehaviorAnalytics\n    // We are specifically interested in unusual logins\n    | where EventSource == \"Azure AD\" and ActivityInsights.ActionUncommonlyPerformedByUser == \"True\"\n    | project UEBAEventTime=TimeGenerated, UEBAActionType=ActionType, UserPrincipalName, UEBASourceIPLocation=SourceIPLocation, UEBAActivityInsights=ActivityInsights, UEBAUsersInsights=UsersInsights\n    | where isnotempty(UserPrincipalName) and isnotempty(UEBASourceIPLocation)\n    | extend joinkey = tolower(UserPrincipalName)\n) on joinkey\n// Create a window around the UEBA event times, check to see if the Run Command action was performed within them\n| extend UEBAWindowStart = UEBAEventTime - 1h, UEBAWindowEnd = UEBAEventTime + 6h\n| where StartTime between (UEBAWindowStart .. UEBAWindowEnd)\n| project StartTime, EndTime, Subscription, VirtualMachineName, Caller, CallerIpAddress, UEBAEventTime, UEBAActionType, UEBASourceIPLocation, UEBAActivityInsights, UEBAUsersInsights\n| extend timestamp = StartTime, AccountCustomEntity=Caller, IPCustomEntity=CallerIpAddress",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P2D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "tactics": [
+                    "LateralMovement",
+                    "CredentialAccess"
+                ],
+                "techniques": [
+                    "T1570",
+                    "T1212"
+                ],
+                "alertRuleTemplateName": "11bda520-a965-4654-9a45-d09f372f71aa",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.7"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/7f0faea4-72bd-434d-92f0-e99b95170c35')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/7f0faea4-72bd-434d-92f0-e99b95170c35')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "NRT",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "NRT Creation of expensive computes in Azure",
+                "description": "Identifies the creation of large size/expensive VMs (GPU or with large no of virtual CPUs) in Azure.\nAdversary may create new or update existing virtual machines sizes to evade defenses \nor use it for cryptomining purposes.\nFor Windows/Linux Vm Sizes - https://docs.microsoft.com/azure/virtual-machines/windows/sizes \nAzure VM Naming Conventions - https://docs.microsoft.com/azure/virtual-machines/vm-naming-conventions",
+                "severity": "Medium",
+                "enabled": false,
+                "query": "let tokens = dynamic([\"416\",\"208\",\"128\",\"120\",\"96\",\"80\",\"72\",\"64\",\"48\",\"44\",\"40\",\"g5\",\"gs5\",\"g4\",\"gs4\",\"nc12\",\"nc24\",\"nv12\"]);\nlet operationList = dynamic([\"microsoft.compute/virtualmachines/write\", \"microsoft.resources/deployments/write\"]);\nAzureActivity\n| where tolower(OperationNameValue) in (operationList)\n| where ActivityStatusValue == \"Accepted\" \n| where isnotempty(Properties)\n| extend vmSize = tolower(tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).hardwareProfile)).vmSize))\n| where isnotempty(vmSize)\n| where vmSize has_any (tokens) \n| extend ComputerName = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).osProfile)).computerName)\n| extend clientIpAddress = tostring(parse_json(HTTPRequest).clientIpAddress)\n| project TimeGenerated, OperationNameValue, ActivityStatusValue, Caller, CallerIpAddress, ComputerName, vmSize\n| extend timestamp = TimeGenerated, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress",
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1578"
+                ],
+                "alertRuleTemplateName": "56fe0db0-6779-46fa-b3c5-006082a53064",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.0.0"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/afca8a7c-7bff-48fe-a16c-f2ab94b6fffb')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/afca8a7c-7bff-48fe-a16c-f2ab94b6fffb')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "Suspicious number of resource creation or deployment activities",
+                "description": "Indicates when an anomalous number of VM creations or deployment activities occur in Azure via the AzureActivity log.\nThe anomaly detection identifies activities that have occurred both since the start of the day 1 day ago and the start of the day 7 days ago.\nThe start of the day is considered 12am UTC time.",
+                "severity": "Medium",
+                "enabled": false,
+                "query": "let szOperationNames = dynamic([\"microsoft.compute/virtualMachines/write\", \"microsoft.resources/deployments/write\"]);\nlet starttime = 7d;\nlet endtime = 1d;\nAzureActivity\n| where TimeGenerated between (startofday(ago(starttime)) .. startofday(ago(endtime)))\n| where OperationNameValue  in~ (szOperationNames)\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = makelist(TimeGenerated), ActivityStatusValue = makelist(ActivityStatusValue),\nOperationIds = makelist(OperationId), CallerIpAddress = makelist(CallerIpAddress), CorrelationId = makelist(CorrelationId)\nby ResourceId, Caller, OperationNameValue, Resource, ResourceGroup\n| mvexpand CallerIpAddress\n| where isnotempty(CallerIpAddress)\n| make-series dResourceCount=dcount(ResourceId)  default=0 on StartTimeUtc in range(startofday(ago(7d)), now(), 1d)\nby Caller, tostring(ActivityTimeStamp), tostring(ActivityStatusValue), tostring(OperationIds), tostring(CallerIpAddress), tostring(CorrelationId), ResourceId, OperationNameValue , Resource, ResourceGroup\n| extend (RSquare,Slope,Variance,RVariance,Interception,LineFit)=series_fit_line(dResourceCount)\n| where Slope > 0.2\n| join kind=leftsemi (\n// Last day's activity is anomalous\nAzureActivity\n| where TimeGenerated >= startofday(ago(endtime))\n| where OperationNameValue in~ (szOperationNames)\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = makelist(TimeGenerated), ActivityStatusValue = makelist(ActivityStatusValue),\nOperationIds = makelist(OperationId), CallerIpAddress = makelist(CallerIpAddress), CorrelationId = makelist(CorrelationId)\nby ResourceId, Caller, OperationNameValue, Resource, ResourceGroup\n| mvexpand CallerIpAddress\n| where isnotempty(CallerIpAddress)\n| make-series dResourceCount=dcount(ResourceId)  default=0 on StartTimeUtc in range(startofday(ago(1d)), now(), 1d)\nby Caller, tostring(ActivityTimeStamp), tostring(ActivityStatusValue), tostring(OperationIds), tostring(CallerIpAddress), tostring(CorrelationId), ResourceId, OperationNameValue , Resource, ResourceGroup\n| extend (RSquare,Slope,Variance,RVariance,Interception,LineFit)=series_fit_line(dResourceCount)\n| where Slope > 0.2\n) on Caller, CallerIpAddress\n| mvexpand todynamic(ActivityTimeStamp), todynamic(ActivityStatusValue), todynamic(OperationIds), todynamic(CorrelationId)\n| extend timestamp = ActivityTimeStamp, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P7D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [
+                    "T1496"
+                ],
+                "alertRuleTemplateName": "361dd1e3-1c11-491e-82a3-bb2e44ac36ba",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.0.1"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/8ac44fab-af7b-4bbe-94b5-5b8b066bb471')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/8ac44fab-af7b-4bbe-94b5-5b8b066bb471')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "Suspicious granting of permissions to an account",
+                "description": "Identifies IPs from which users grant access to other users on azure resources and alerts when a previously unseen source IP address is used.",
+                "severity": "Medium",
+                "enabled": false,
+                "query": "let starttime = 14d;\nlet endtime = 1d;\n// The number of operations below which an IP address is considered an unusual source of role assignment operations\nlet alertOperationThreshold = 5;\nlet AzureBuiltInRole = externaldata(Role:string,RoleDescription:string,ID:string) [@\"https://raw.githubusercontent.com/Azure/Azure-Sentinel/master/Sample%20Data/Feeds/AzureBuiltInRole.csv\"] with (format=\"csv\", ignoreFirstRecord=True);\nlet createRoleAssignmentActivity = AzureActivity\n| where OperationNameValue =~ \"microsoft.authorization/roleassignments/write\";\nlet RoleAssignedActivity = createRoleAssignmentActivity \n| where TimeGenerated between (ago(starttime) .. ago(endtime))\n| summarize count() by CallerIpAddress, Caller\n| where count_ >= alertOperationThreshold\n| join kind = rightanti ( \ncreateRoleAssignmentActivity\n| where TimeGenerated > ago(endtime)\n| extend PrincipalId = tostring(parse_json(tostring(parse_json(tostring(Properties_d.requestbody)).Properties)).PrincipalId)\n| extend PrincipalType = tostring(parse_json(tostring(parse_json(tostring(Properties_d.requestbody)).Properties)).PrincipalType)\n| extend Scope = tostring(parse_json(tostring(parse_json(tostring(Properties_d.requestbody)).Properties)).Scope)\n| extend RoleAddedDetails = tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).requestbody)).Properties)).RoleDefinitionId) \n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = make_set(TimeGenerated), ActivityStatusValue = make_set(ActivityStatusValue), \nOperationIds = make_set(OperationId), CorrelationId = make_set(CorrelationId), ActivityCountByCallerIPAddress = count()  \nby ResourceId, CallerIpAddress, Caller, OperationNameValue, Resource, ResourceGroup, PrincipalId, PrincipalType, Scope, RoleAddedDetails\n) on CallerIpAddress, Caller\n| extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress;\nlet RoleAssignedActivitywithRoleDetails = RoleAssignedActivity\n| extend RoleAssignedID = tostring(split(RoleAddedDetails, \"/\")[-1])\n| join kind = inner (AzureBuiltInRole \n) on $left.RoleAssignedID == $right.ID;\nRoleAssignedActivitywithRoleDetails\n| summarize arg_max(StartTimeUtc, *) by PrincipalId, RoleAssignedID\n| join kind = leftouter( IdentityInfo\n| summarize arg_max(TimeGenerated, *) by AccountObjectId\n) on $left.PrincipalId == $right.AccountObjectId\n| project ActivityTimeStamp, OperationNameValue, Caller, CallerIpAddress, PrincipalId, RoleAssignedID, RoleAddedDetails, Role, RoleDescription, AccountUPN, AccountCreationTime, GroupMembership, UserType, ActivityStatusValue, \nResourceGroup, PrincipalType, Scope, CorrelationId, timestamp, AccountCustomEntity, IPCustomEntity",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P14D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "tactics": [
+                    "Persistence",
+                    "PrivilegeEscalation"
+                ],
+                "techniques": [
+                    "T1098",
+                    "T1548"
+                ],
+                "alertRuleTemplateName": "b2c15736-b9eb-4dae-8b02-3016b6a45a32",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.0.0"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/ce38aa94-549b-48c8-85bb-b7b90345795a')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/ce38aa94-549b-48c8-85bb-b7b90345795a')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "TI map IP entity to AzureActivity",
+                "description": "Identifies a match in AzureActivity from any IP IOC from TI",
+                "severity": "Medium",
+                "enabled": false,
+                "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet IoCList = materialize(externaldata(TimeGenerated:datetime,IoC:string,IoC_Type:string,ExpirationDateTime:datetime,Description:string,Action:string, ConfidenceScore:real, ThreatType:string, Active:string,Type:string, TrafficLightProtocolLevel:string, ActivityGroupNames:string)[@\"https://raw.githubusercontent.com/microsoft/mstic/master/RapidReleaseTI/Indicators.csv\"] with(format=\"csv\", ignoreFirstRecord=True));\nlet IP_Indicators = (union isfuzzy=true\n(ThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n// Picking up only IOC's that contain the entities we want\n| where isnotempty(NetworkIP) or isnotempty(EmailSourceIpAddress) or isnotempty(NetworkDestinationIP) or isnotempty(NetworkSourceIP)\n// As there is potentially more than 1 indicator type for matching IP, taking NetworkIP first, then others if that is empty.\n// Taking the first non-empty value based on potential IOC match availability\n| extend TI_ipEntity = iff(isnotempty(NetworkIP), NetworkIP, NetworkDestinationIP)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(NetworkSourceIP), NetworkSourceIP, TI_ipEntity)\n| extend TI_ipEntity = iff(isempty(TI_ipEntity) and isnotempty(EmailSourceIpAddress), EmailSourceIpAddress, TI_ipEntity)\n//Exclude local addresses, using the ipv4_is_private operator\n| where ipv4_is_private(TI_ipEntity) == false and  TI_ipEntity !startswith \"fe80\" and TI_ipEntity !startswith \"::\" and TI_ipEntity !startswith \"127.\"\n),\n(IoCList\n| where IoC_Type =~ 'IP'\n| where ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IoC\n| where Active =~ 'True'\n| extend TI_ipEntity = IoC\n| project-away  IoC_Type\n)\n);\nIP_Indicators\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n    AzureActivity | where TimeGenerated >= ago(dt_lookBack)\n    // renaming time column so it is clear the log this came from\n    | extend AzureActivity_TimeGenerated = TimeGenerated\n)\non $left.TI_ipEntity == $right.CallerIpAddress\n| where AzureActivity_TimeGenerated < ExpirationDateTime\n| summarize AzureActivity_TimeGenerated = arg_max(AzureActivity_TimeGenerated, *) by IndicatorId, CallerIpAddress, IoC\n| project AzureActivity_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, Url, ExpirationDateTime, ConfidenceScore, TI_ipEntity, CallerIpAddress, \nCaller, OperationNameValue, ActivityStatusValue, CategoryValue, ResourceId, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type\n| extend timestamp = AzureActivity_TimeGenerated, IPCustomEntity = CallerIpAddress, AccountCustomEntity = Caller, URLCustomEntity = Url",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "P14D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [],
+                "alertRuleTemplateName": "2441bce9-02e4-407b-8cc7-7d597f38b8b0",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "URL",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Url",
+                                "columnName": "URLCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "AzureResource",
+                        "fieldMappings": [
+                            {
+                                "identifier": "ResourceId",
+                                "columnName": "ResourceId"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.3.1"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/b544e340-dbce-4ca7-9769-99e4d9a60786')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/b544e340-dbce-4ca7-9769-99e4d9a60786')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "Azure Active Directory Hybrid Health AD FS New Server",
+                "description": "This detection uses AzureActivity logs (Administrative category) to identify the creation or update of a server instance in an Azure AD Hybrid health AD FS service.\nA threat actor can create a new AD Health ADFS service and create a fake server instance to spoof AD FS signing logs. There is no need to compromise an on-prem AD FS server.\nThis can be done programmatically via HTTP requests to Azure. More information in this blog: https://o365blog.com/post/hybridhealthagent/",
+                "severity": "Medium",
+                "enabled": false,
+                "query": "AzureActivity\n| where CategoryValue == 'Administrative'\n| where ResourceProviderValue =~ 'Microsoft.ADHybridHealthService'\n| where _ResourceId contains 'AdFederationService'\n| where OperationNameValue =~ 'Microsoft.ADHybridHealthService/services/servicemembers/action'\n| extend claimsJson = parse_json(Claims)\n| extend AppId = tostring(claimsJson.appid)\n| extend AccountName = tostring(claimsJson.name)\n| project-away claimsJson\n| extend timestamp = TimeGenerated, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1578"
+                ],
+                "alertRuleTemplateName": "88f453ff-7b9e-45bb-8c12-4058ca5e44ee",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.0.0"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/8778029c-4a10-4ad6-8abb-d257cbd4da47')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/8778029c-4a10-4ad6-8abb-d257cbd4da47')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "Rare subscription-level operations in Azure",
+                "description": "This query looks for a few sensitive subscription-level events based on Azure Activity Logs.\n For example this monitors for the operation name 'Create or Update Snapshot' which is used for creating backups but could be misused by attackers\n to dump hashes or extract sensitive information from the disk.",
+                "severity": "Low",
+                "enabled": false,
+                "query": "let starttime = 14d;\nlet endtime = 1d;\n// The number of operations below which an IP address is considered an unusual source of role assignment operations\nlet alertOperationThreshold = 5;\nlet SensitiveOperationList =  dynamic([\"microsoft.compute/snapshots/write\", \"microsoft.network/networksecuritygroups/write\", \"microsoft.storage/storageaccounts/listkeys/action\"]);\nlet SensitiveActivity = AzureActivity\n| where OperationNameValue in~ (SensitiveOperationList) or OperationNameValue hassuffix \"listkeys/action\"\n| where ActivityStatusValue =~ \"Success\";\nSensitiveActivity\n| where TimeGenerated between (ago(starttime) .. ago(endtime))\n| summarize count() by CallerIpAddress, Caller, OperationNameValue\n| where count_ >= alertOperationThreshold\n| join kind = rightanti (\nSensitiveActivity\n| where TimeGenerated >= ago(endtime)\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityTimeStamp = makelist(TimeGenerated), ActivityStatusValue = makelist(ActivityStatusValue),\nOperationIds = makelist(OperationId), CorrelationIds = makelist(CorrelationId), Resources = makelist(Resource), ResourceGroups = makelist(ResourceGroup), ResourceIds = makelist(ResourceId), ActivityCountByCallerIPAddress = count()\nby CallerIpAddress, Caller, OperationNameValue\n) on CallerIpAddress, Caller, OperationNameValue\n| extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P14D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "tactics": [
+                    "CredentialAccess",
+                    "Persistence"
+                ],
+                "techniques": [
+                    "T1003",
+                    "T1098"
+                ],
+                "alertRuleTemplateName": "23de46ea-c425-4a77-b456-511ae4855d69",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.0.1"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/d40b9701-16a8-4182-84be-fab0783538b3')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/d40b9701-16a8-4182-84be-fab0783538b3')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "New CloudShell User",
+                "description": "Identifies when a user creates an Azure CloudShell for the first time.\nMonitor this activity to ensure only expected user are using CloudShell",
+                "severity": "Low",
+                "enabled": false,
+                "query": "let match_window = 3m;\nAzureActivity\n| where ResourceGroup has \"cloud-shell\"\n| where (OperationNameValue =~ \"Microsoft.Storage/storageAccounts/listKeys/action\")\n| where ActivityStatusValue == \"Success\"\n| extend TimeKey = bin(TimeGenerated, match_window), AzureIP = CallerIpAddress\n| join kind = inner\n(AzureActivity\n| where ResourceGroup has \"cloud-shell\"\n| where (OperationNameValue =~ \"Microsoft.Storage/storageAccounts/write\")\n| extend TimeKey = bin(TimeGenerated, match_window), UserIP = CallerIpAddress\n) on Caller, TimeKey\n| summarize count() by TimeKey, Caller, ResourceGroup, SubscriptionId, TenantId, AzureIP, UserIP, HTTPRequest, Type, Properties, CategoryValue, OperationList = strcat(OperationNameValue, ' , ', OperationNameValue1)",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "tactics": [
+                    "Execution"
+                ],
+                "techniques": [
+                    "T1059"
+                ],
+                "alertRuleTemplateName": "6d7214d9-4a28-44df-aafb-0910b9e6ae3e",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "Caller"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "UserIP"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.0.1"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/8e2698a4-0122-4f17-b581-f353dc5f44b1')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/8e2698a4-0122-4f17-b581-f353dc5f44b1')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "TI map Email entity to AzureActivity",
+                "description": "Identifies a match in AzureActivity table from any Email IOC from TI",
+                "severity": "Medium",
+                "enabled": false,
+                "query": "let dt_lookBack = 1h;\nlet ioc_lookBack = 14d;\nlet emailregex = @'^[a-zA-Z0-9_.+-]+@[a-zA-Z0-9-]+\\.[a-zA-Z0-9-.]+$';\nThreatIntelligenceIndicator\n| where TimeGenerated >= ago(ioc_lookBack) and ExpirationDateTime > now()\n| summarize LatestIndicatorTime = arg_max(TimeGenerated, *) by IndicatorId\n| where Active == true\n//Filtering the table for Email related IOCs\n| where isnotempty(EmailSenderAddress)\n// using innerunique to keep perf fast and result set low, we only need one match to indicate potential malicious activity that needs to be investigated\n| join kind=innerunique (\n    AzureActivity | where TimeGenerated >= ago(dt_lookBack) and isnotempty(Caller)\n    | extend Caller = tolower(Caller)\n    | where Caller matches regex emailregex\n    | extend AzureActivity_TimeGenerated = TimeGenerated\n)\non $left.EmailSenderAddress == $right.Caller\n| where AzureActivity_TimeGenerated < ExpirationDateTime\n| summarize AzureActivity_TimeGenerated = arg_max(AzureActivity_TimeGenerated, *) by IndicatorId, Caller\n| project AzureActivity_TimeGenerated, Description, ActivityGroupNames, IndicatorId, ThreatType, ExpirationDateTime, ConfidenceScore, Url, EmailSenderName, EmailRecipient,\nEmailSourceDomain, EmailSourceIpAddress, EmailSubject, FileHashValue, FileHashType, Caller, Level, CallerIpAddress, CategoryValue, OperationNameValue, ActivityStatusValue,\nResourceGroup, SubscriptionId\n| extend timestamp = AzureActivity_TimeGenerated, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress, URLCustomEntity = Url",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "P14D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [],
+                "alertRuleTemplateName": "cca3b4d9-ac39-4109-8b93-65bb284003e6",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "URL",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Url",
+                                "columnName": "URLCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.2.2"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/6590ba01-f450-440f-8059-8475c81d1202')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/6590ba01-f450-440f-8059-8475c81d1202')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "Mass Cloud resource deletions Time Series Anomaly",
+                "description": "This query generates baseline pattern of cloud resource deletions by an user and generated anomaly \nwhen any unusual spike is detected.\nThese anomalies from unusual or privileged users could be an indication of cloud infrastructure \ntake-down by an adversary ",
+                "severity": "Medium",
+                "enabled": false,
+                "query": "let starttime = 14d;\nlet endtime = 1d;\nlet timeframe = 1h;\nlet TotalEventsThreshold = 25; \nlet TimeSeriesData = \nAzureActivity \n| where TimeGenerated between (startofday(ago(starttime))..startofday(ago(endtime)))\n| where OperationNameValue endswith \"delete\" \n| project TimeGenerated, Caller \n| make-series Total = count() on TimeGenerated from startofday(ago(starttime)) to startofday(ago(endtime)) step timeframe by Caller; \nlet TimeSeriesAlerts = materialize(TimeSeriesData \n| extend (anomalies, score, baseline) = series_decompose_anomalies(Total, 3, -1, 'linefit') \n| mv-expand Total to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double), score to typeof(double), baseline to typeof(long) \n| where anomalies > 0 \n| project Caller, TimeGenerated, Total, baseline, anomalies, score \n| where Total > TotalEventsThreshold and baseline > 0 ); \nTimeSeriesAlerts \n| where TimeGenerated > (ago(endtime)) \n| project TimeGenerated, Caller \n| join (AzureActivity \n| where TimeGenerated > (ago(endtime)) \n| where OperationNameValue endswith \"delete\" \n| summarize count(), make_set(OperationNameValue), make_set(Resource) by bin(TimeGenerated, 1h), Caller) on TimeGenerated, Caller \n| extend timestamp = TimeGenerated, AccountCustomEntity = Caller",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P14D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [
+                    "T1485"
+                ],
+                "alertRuleTemplateName": "ed43bdb7-eaab-4ea4-be52-6951fcfa7e3b",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.0.0"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/8fe495ce-48a4-4d3a-a1ee-5f77e838c989')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/8fe495ce-48a4-4d3a-a1ee-5f77e838c989')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "Suspicious Resource deployment",
+                "description": "Identifies when a rare Resource and ResourceGroup deployment occurs by a previously unseen Caller.",
+                "severity": "Low",
+                "enabled": false,
+                "query": "let szOperationNames = dynamic([\"Microsoft.Compute/virtualMachines/write\", \"Microsoft.Resources/deployments/write\"]);\nlet starttime = 14d;\nlet endtime = 1d;\nlet RareCaller = AzureActivity\n| where TimeGenerated between (ago(starttime) .. ago(endtime))\n| where OperationNameValue in~ (szOperationNames)\n| project ResourceGroup, Caller, OperationNameValue, CallerIpAddress\n| join kind=rightantisemi (\nAzureActivity\n| where TimeGenerated > ago(endtime)\n| where OperationNameValue in~ (szOperationNames)\n| summarize StartTimeUtc = min(TimeGenerated), EndTimeUtc = max(TimeGenerated), ActivityStatusValue = makeset(ActivityStatusValue), OperationIds = makeset(OperationId), CallerIpAddress = makeset(CallerIpAddress) \nby ResourceId, Caller, OperationNameValue, Resource, ResourceGroup\n) on Caller, ResourceGroup \n| mvexpand CallerIpAddress\n| where isnotempty(CallerIpAddress);\nlet Counts = RareCaller | summarize ActivityCountByCaller = count() by Caller;\nRareCaller | join kind= inner (Counts) on Caller | project-away Caller1\n| extend timestamp = StartTimeUtc, AccountCustomEntity = Caller, IPCustomEntity = tostring(CallerIpAddress)\n| sort by ActivityCountByCaller desc nulls last",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P14D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [
+                    "T1496"
+                ],
+                "alertRuleTemplateName": "9fb57e58-3ed8-4b89-afcf-c8e786508b1c",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.0.0"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/8dc4d30f-c411-4bb6-99d9-485463e6d217')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/8dc4d30f-c411-4bb6-99d9-485463e6d217')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "Azure Active Directory Hybrid Health AD FS Suspicious Application",
+                "description": "This detection uses AzureActivity logs (Administrative category) to a suspicious application adding a server instance to an Azure AD Hybrid health AD FS service or deleting the AD FS service instance.\nUsually the Azure AD Connect Health Agent application with ID cf6d7e68-f018-4e0a-a7b3-126e053fb88d and ID cb1056e2-e479-49de-ae31-7812af012ed8 is used to perform those operations.",
+                "severity": "Medium",
+                "enabled": false,
+                "query": "// Azure AD Connect Health Agent - cf6d7e68-f018-4e0a-a7b3-126e053fb88d\n// Azure Active Directory Connect - cb1056e2-e479-49de-ae31-7812af012ed8\nlet appList = dynamic(['cf6d7e68-f018-4e0a-a7b3-126e053fb88d','cb1056e2-e479-49de-ae31-7812af012ed8']);\nlet operationNamesList = dynamic(['Microsoft.ADHybridHealthService/services/servicemembers/action','Microsoft.ADHybridHealthService/services/delete']);\nAzureActivity\n| where CategoryValue == 'Administrative'\n| where ResourceProviderValue =~ 'Microsoft.ADHybridHealthService'\n| where _ResourceId contains 'AdFederationService'\n| where OperationNameValue in~ (operationNamesList)\n| extend claimsJson = parse_json(Claims)\n| extend AppId = tostring(claimsJson.appid)\n| extend AccountName = tostring(claimsJson.name)\n| where AppId !in (appList)\n| project-away claimsJson\n| extend timestamp = TimeGenerated, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "tactics": [
+                    "CredentialAccess",
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1528",
+                    "T1550"
+                ],
+                "alertRuleTemplateName": "d9938c3b-16f9-444d-bc22-ea9a9110e0fd",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.0.0"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/47218720-4015-400f-a05f-a5def06e127d')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/47218720-4015-400f-a05f-a5def06e127d')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "Azure Diagnostic settings removed from a resource",
+                "description": "This query looks for diagnostic settings that are removed from a resource.\nThis could indicate an attacker or malicious internal trying to evade detection before malicious act is performed.\nIf the diagnostic settings are being deleted as part of a parent resource deletion, the event is ignores.",
+                "severity": "Medium",
+                "enabled": false,
+                "query": "AzureActivity\n  | where OperationNameValue == 'MICROSOFT.INSIGHTS/DIAGNOSTICSETTINGS/DELETE' and ActivityStatusValue == \"Start\"\n  | extend ParentResource_a = split(_ResourceId,\"/\")\n  | extend ParentResourceLength = array_length(ParentResource_a)-4\n  | extend ParentResourceSplit = array_split(ParentResource_a,ParentResourceLength)\n  | extend resource = strcat_array(ParentResourceSplit[0],\"/\")\n  | project Diagdelete = TimeGenerated, Caller, ResourceProviderValue, _ResourceId, SubscriptionId, ResourceGroup, OperationNameValue, ActivityStatusValue, ActivitySubstatusValue, Start=TimeGenerated, resource, CallerIpAddress\n  | join kind=leftanti  ( AzureActivity\n  | where OperationNameValue != 'MICROSOFT.INSIGHTS/DIAGNOSTICSETTINGS/DELETE' and OperationNameValue endswith \"/DELETE\"\n  | where ActivityStatusValue == 'Start'\n  | project Caller, ResourceProviderValue, resource = tostring(parse_json(Properties).resource), SubscriptionId, ResourceGroup, OperationNameValue, ActivityStatusValue, ActivitySubstatusValue, Start=TimeGenerated) on $left.resource == $right.resource\n  | project Caller, ResourceProviderValue, resource, SubscriptionId, ResourceGroup, OperationNameValue, ActivityStatusValue, ActivitySubstatusValue, Start, CallerIpAddress",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "PT2H",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1562"
+                ],
+                "alertRuleTemplateName": "6e95aef3-a1e0-4063-8e74-cd59aa59f245",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "Caller"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "CallerIpAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.1"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/5d4d2801-dac6-45b3-a340-9482bc03976c')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/5d4d2801-dac6-45b3-a340-9482bc03976c')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "Azure Active Directory Hybrid Health AD FS Service Delete",
+                "description": "This detection uses AzureActivity logs (Administrative category) to identify the deletion of an Azure AD Hybrid health AD FS service instance in a tenant.\nA threat actor can create a new AD Health ADFS service and create a fake server to spoof AD FS signing logs.\nThe health AD FS service can then be deleted after it is not longer needed via HTTP requests to Azure.\nMore information in this blog https://o365blog.com/post/hybridhealthagent/",
+                "severity": "Medium",
+                "enabled": false,
+                "query": "AzureActivity\n| where CategoryValue == 'Administrative'\n| where ResourceProviderValue =~ 'Microsoft.ADHybridHealthService'\n| where _ResourceId contains 'AdFederationService'\n| where OperationNameValue =~ 'Microsoft.ADHybridHealthService/services/delete'\n| extend claimsJson = parse_json(Claims)\n| extend AppId = tostring(claimsJson.appid)\n| extend AccountName = tostring(claimsJson.name)\n| project-away claimsJson\n| extend timestamp = TimeGenerated, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1578"
+                ],
+                "alertRuleTemplateName": "86a036b2-3686-42eb-b417-909fc0867771",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.0.0"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/37265507-d927-4b04-a71b-f1a85797a8cd')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/37265507-d927-4b04-a71b-f1a85797a8cd')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "Workspace deletion attempt from an infected device",
+                "description": "This query will alert on any sign-ins from devices infected with malware in correlation with potential workspace deletion activity. \nAttackers may attempt to delete  workspaces containing  compute instances  after successful compromise to cause service unavailability to regular business operation.",
+                "severity": "Medium",
+                "enabled": false,
+                "query": "SecurityAlert\n| where TimeGenerated > ago(1d)\n| where ProductName == \"Azure Active Directory Identity Protection\"\n| where AlertName == \"Sign-in from an infected device\"\n| mv-expand Entity = todynamic(Entities)\n| where Entity.Type == \"account\"\n| extend AadTenantId = tostring(Entity.AadTenantId)\n| extend AadUserId = tostring(Entity.AadUserId)\n| extend IpAddress = tostring(parse_json(Entities)[2].Address)\n| join kind=inner (\nIdentityInfo\n| distinct AccountTenantId, AccountObjectId, AccountUPN, AccountDisplayName\n| extend UserAccount = AccountUPN\n| extend UserName = AccountDisplayName\n| where isnotempty(AccountDisplayName) and isnotempty(UserAccount)\n| project AccountTenantId, AccountObjectId, UserAccount, UserName\n)\non\n$left.AadTenantId == $right.AccountTenantId,\n$left.AadUserId == $right.AccountObjectId\n| extend CompromisedEntity = iff(CompromisedEntity == \"N/A\" or isempty(CompromisedEntity), UserAccount, CompromisedEntity)\n| project  AlertName, AlertSeverity, CompromisedEntity, UserAccount, IpAddress,TimeGenerated, UserName\n| join kind=inner \n(\nAzureActivity\n| where OperationNameValue hassuffix (\"/workspaces/computes/delete\")\n| where ActivityStatusValue =~ \"Succeeded\"\n| project TimeGenerated, _ResourceId, SubscriptionId, UserAccount=Caller, IpAddress=CallerIpAddress, CorrelationId, OperationId, ResourceGroup, TenantId\n) on IpAddress, UserAccount\n| extend timestamp = TimeGenerated, AccountCustomEntity = UserAccount, IPCustomEntity = IpAddress",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P14D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "tactics": [
+                    "InitialAccess",
+                    "Impact"
+                ],
+                "techniques": [
+                    "T1078",
+                    "T1489"
+                ],
+                "alertRuleTemplateName": "a5b3429d-f1da-42b9-883c-327ecb7b91ff",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.3"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/60b4a90c-191f-4c1b-9825-7ed437437609')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/60b4a90c-191f-4c1b-9825-7ed437437609')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "Creation of expensive computes in Azure",
+                "description": "Identifies the creation of large size/expensive VMs (GPU or with large no of virtual CPUs) in Azure.\nAdversary may create new or update existing virtual machines sizes to evade defenses \nor use it for cryptomining purposes.\nFor Windows/Linux Vm Sizes - https://docs.microsoft.com/azure/virtual-machines/windows/sizes \nAzure VM Naming Conventions - https://docs.microsoft.com/azure/virtual-machines/vm-naming-conventions",
+                "severity": "Low",
+                "enabled": false,
+                "query": "let tokens = dynamic([\"416\",\"208\",\"128\",\"120\",\"96\",\"80\",\"72\",\"64\",\"48\",\"44\",\"40\",\"g5\",\"gs5\",\"g4\",\"gs4\",\"nc12\",\"nc24\",\"nv12\"]);\nlet operationList = dynamic([\"microsoft.compute/virtualmachines/write\", \"microsoft.resources/deployments/write\"]);\nAzureActivity\n| where tolower(OperationNameValue) in (operationList)\n| where ActivityStatusValue == \"Accepted\" \n| where isnotempty(Properties)\n| extend vmSize = tolower(tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).hardwareProfile)).vmSize))\n| where isnotempty(vmSize)\n| where vmSize has_any (tokens) \n| extend ComputerName = tostring(parse_json(tostring(parse_json(tostring(parse_json(tostring(parse_json(Properties).responseBody)).properties)).osProfile)).computerName)\n| extend clientIpAddress = tostring(parse_json(HTTPRequest).clientIpAddress)\n| project TimeGenerated, OperationNameValue, ActivityStatusValue, Caller, CallerIpAddress, ComputerName, vmSize\n| extend timestamp = TimeGenerated, AccountCustomEntity = Caller, IPCustomEntity = CallerIpAddress",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 1,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "tactics": [
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1578"
+                ],
+                "alertRuleTemplateName": "9736e5f1-7b6e-4bfb-a708-e53ff1d182c3",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "2.0.0"
+            }
+        }
+    ]
+}
