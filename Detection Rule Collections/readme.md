@@ -21,9 +21,9 @@ List of Detection rules per .json file:
 	 <td>52 rules</td>
       </tr>
       <tr>
-         <td></td>
-         <td></td>
-	 <td></td>
+         <td>Azure Activity</td>
+         <td>ms-sentinel-azure-activity-detection-rules-15022023</td>
+	 <td>16 rules (2 NRT)</td>
       </tr>
       <tr>
          <td></td>
@@ -45,7 +45,7 @@ Choose the .json file on the prompt. And see if the deployment succeeded in the 
 Default all the rules will be in state "Disabled".
 <ol>
     <li>Option 1, You can select rules from the portal witch you would like to enable (Picture below)</li>
-    <li>Option 2, You can change: "enabled": false, ==to==> "enabled": true, directly in the .json file. Example with Visual studio code and ctrl + f (Find and replace)</li>
+    <li>Option 2, You can change: "enabled": false, ==to==> "enabled": true, directly in the .json file. Example with Visual studio code and ctrl + f (Find and replace, just dont replace the groupingConfiguration parameters :))</li>
 </ol>
 	
 ![image](https://user-images.githubusercontent.com/81473026/218717484-b42845c0-ea28-4508-8ac3-2d27435272d6.png)
