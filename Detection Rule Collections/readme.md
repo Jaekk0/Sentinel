@@ -12,6 +12,7 @@ List of Detection rules per .json file:
          <th>Name</th>
          <th>Json filename</th>
 	 <th>Rule count</th>
+	 <th>Comment</th>
       </tr>
    </thead>
    <tbody>
@@ -19,15 +20,18 @@ List of Detection rules per .json file:
          <td>Aws</td>
          <td>ms-sentinel-aws-detection-rules-14022023</td>
 	 <td>52 rules</td>
+	 <td></td>
       </tr>
       <tr>
          <td>Azure Activity</td>
          <td>ms-sentinel-azure-activity-detection-rules-15022023</td>
 	 <td>16 rules (2 NRT)</td>
+	 <td>One rule has UEBA tables incluuded so remember to enable UEBA too.</td>
       </tr>
       <tr>
          <td></td>
          <td></td>
+	 <td></td>
 	 <td></td>
       </tr>      
    </tbody>
