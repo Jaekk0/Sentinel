@@ -1,0 +1,212 @@
+{
+    "$schema":  "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion":  "1.0.0.0",
+    "metadata":  {
+        "title":  "",
+        "description":  "",
+        "prerequisites":  "",
+        "postDeployment":  [
+        ],
+        "prerequisitesDeployTemplateFile":  "",
+        "lastUpdateTime":  "",
+        "entities":  [
+        ],
+        "tags":  [
+        ],
+        "support":  {
+            "tier":  "community",
+            "armtemplate":  "Generated from https://github.com/Azure/Azure-Sentinel/tree/master/Tools/Playbook-ARM-Template-Generator"
+        },
+        "author":  {
+            "name":  ""
+        }
+    },
+    "parameters":  {
+        "PlaybookName":  {
+            "defaultValue":  "la-lastmonthincidents-closed-falsepositive",
+            "type":  "string"
+        },
+        "Email Recipient":  {
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter value for Email Recipient"
+            }
+        },
+        "ResourceGroup":  {
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter value for ResourceGroup"
+            }
+        },
+        "Workspacename":  {
+            "type":  "string",
+            "metadata":  {
+                "description":  "Enter value for Workspacename"
+            }
+        }
+    },
+    "variables":  {
+        "AzuremonitorlogsConnectionName":  "[concat('Azuremonitorlogs-', parameters('PlaybookName'))]",
+        "Office365ConnectionName":  "[concat('Office365-', parameters('PlaybookName'))]"
+    },
+    "resources":  [
+        {
+            "properties":  {
+                "provisioningState":  "Succeeded",
+                "state":  "Enabled",
+                "definition":  {
+                    "$schema":  "https://schema.management.azure.com/providers/Microsoft.Logic/schemas/2016-06-01/workflowdefinition.json#",
+                    "contentVersion":  "1.0.0.0",
+                    "parameters":  {
+                        "$connections":  {
+                            "defaultValue":  {
+                            },
+                            "type":  "Object"
+                        },
+                        "Email Recipient":  {
+                            "defaultValue":  "[parameters('Email Recipient')]",
+                            "type":  "string"
+                        },
+                        "ResourceGroup":  {
+                            "defaultValue":  "[parameters('ResourceGroup')]",
+                            "type":  "string"
+                        },
+                        "Workspacename":  {
+                            "defaultValue":  "[parameters('Workspacename')]",
+                            "type":  "string"
+                        }
+                    },
+                    "triggers":  {
+                        "Recurrence":  {
+                            "recurrence":  {
+                                "frequency":  "Month",
+                                "interval":  1,
+                                "startTime":  "2023-03-01T00:00:00Z",
+                                "timeZone":  "UTC"
+                            },
+                            "evaluatedRecurrence":  {
+                                "frequency":  "Month",
+                                "interval":  1,
+                                "startTime":  "2023-03-01T00:00:00Z",
+                                "timeZone":  "UTC"
+                            },
+                            "type":  "Recurrence"
+                        }
+                    },
+                    "actions":  {
+                        "Run_query_and_visualize_results":  {
+                            "runAfter":  {
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  "let time_start = startofmonth(datetime(now), -1); \nlet time_end = endofmonth(datetime(now),-1); \nlet thershold_incidentcount = 5;\nSecurityIncident\n| where ClosedTime between (time_start .. time_end)\n| where Status == \"Closed\"\n| where Classification == \"FalsePositive\"\n| summarize IncidentCount = count() by Title\n| where IncidentCount \u003e= thershold_incidentcount\n| sort by IncidentCount asc",
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['azuremonitorlogs']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/visualizeQuery",
+                                "queries":  {
+                                    "resourcegroups":  "@parameters('ResourceGroup')",
+                                    "resourcename":  "@parameters('Workspacename')",
+                                    "resourcetype":  "Log Analytics Workspace",
+                                    "subscriptions":  "e5407594-abb9-438d-b650-fa1f755f2e1c",
+                                    "timerange":  "Set in query",
+                                    "visType":  "Html Table"
+                                }
+                            }
+                        },
+                        "Send_an_email_(V2)":  {
+                            "runAfter":  {
+                                "Run_query_and_visualize_results":  [
+                                    "Succeeded"
+                                ]
+                            },
+                            "type":  "ApiConnection",
+                            "inputs":  {
+                                "body":  {
+                                    "Body":  "\u003cp\u003eBelow is a table of closed false positive Microsoft Sentinel incidents from last month. Table only contains false positive incidents more than 5 incidents with the same incident title.\u003cbr\u003e\n\u003cbr\u003e\n@{base64ToString(body('Run_query_and_visualize_results')?['body'])}\u003c/p\u003e",
+                                    "Importance":  "Normal",
+                                    "Subject":  "Incident optimization: Last month Sentinel Incidents closed as False Positive",
+                                    "To":  "@parameters('Email Recipient')"
+                                },
+                                "host":  {
+                                    "connection":  {
+                                        "name":  "@parameters('$connections')['office365']['connectionId']"
+                                    }
+                                },
+                                "method":  "post",
+                                "path":  "/v2/Mail"
+                            }
+                        }
+                    },
+                    "outputs":  {
+                    }
+                },
+                "parameters":  {
+                    "$connections":  {
+                        "value":  {
+                            "azuremonitorlogs":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                                "connectionName":  "[variables('AzuremonitorlogsConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                            },
+                            "office365":  {
+                                "connectionId":  "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]",
+                                "connectionName":  "[variables('Office365ConnectionName')]",
+                                "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Office365')]"
+                            }
+                        }
+                    }
+                }
+            },
+            "name":  "[parameters('PlaybookName')]",
+            "type":  "Microsoft.Logic/workflows",
+            "location":  "[resourceGroup().location]",
+            "tags":  {
+                "RgCategory":  "Security",
+                "hidden-SentinelTemplateName":  "la-lastmonthincidents-closed-falsepositive",
+                "hidden-SentinelTemplateVersion":  "1.0"
+            },
+            "identity":  {
+                "type":  "SystemAssigned"
+            },
+            "apiVersion":  "2017-07-01",
+            "dependsOn":  [
+                "[resourceId('Microsoft.Web/connections', variables('AzuremonitorlogsConnectionName'))]",
+                "[resourceId('Microsoft.Web/connections', variables('Office365ConnectionName'))]"
+            ]
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('AzuremonitorlogsConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('AzuremonitorlogsConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Azuremonitorlogs')]"
+                }
+            }
+        },
+        {
+            "type":  "Microsoft.Web/connections",
+            "apiVersion":  "2016-06-01",
+            "name":  "[variables('Office365ConnectionName')]",
+            "location":  "[resourceGroup().location]",
+            "kind":  "V1",
+            "properties":  {
+                "displayName":  "[variables('Office365ConnectionName')]",
+                "customParameterValues":  {
+                },
+                "api":  {
+                    "id":  "[concat('/subscriptions/', subscription().subscriptionId, '/providers/Microsoft.Web/locations/', resourceGroup().location, '/managedApis/Office365')]"
+                }
+            }
+        }
+    ]
+}
