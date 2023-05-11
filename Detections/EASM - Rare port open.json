@@ -1,0 +1,80 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/12bd8d5d-33df-4340-83af-e4d278605816')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/12bd8d5d-33df-4340-83af-e4d278605816')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "EASM - Rare port open",
+                "description": "Find rare port open in External Attack Surface Management logs",
+                "severity": "Low",
+                "enabled": true,
+                "query": "let rareportlist = \r\ndynamic([\r\n\"21\", //ftp\r\n\"22\", //ssh\r\n\"23\", //telnet\r\n\"25\", //smtp\r\n\"53\", //domain name system\r\n\"110\", //pop3\r\n\"111\", //rpcbind\r\n\"135\", //msrpc\r\n\"139\", //netbios-ssn\r\n\"143\", //imap\r\n\"445\", //microsoft-ds\r\n\"993\", //imaps\r\n\"995\", //pop3s\r\n\"1723\", //pptp\r\n\"3306\", //mysql\r\n\"3389\", //ms-wbt-server\r\n\"5900\", //vnc\r\n\"8080\" //http-proxy\r\n]);\r\nEasmHostAsset_CL\r\n| extend System = Host_s\r\n| extend EASM = parse_json(Ports_s)\r\n| extend Source = 'EasmHostAsset_CL'\r\n| mv-expand EASM\r\n| extend Port = tostring(EASM.Port)\r\n| extend LastPortState = EASM.LastPortState\r\n| where Port  in (rareportlist)\r\n| where LastPortState == \"OPEN\"\r\n| project System, Port, LastPortState, Source, TimeGenerated",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Reconnaissance",
+                    "InitialAccess"
+                ],
+                "techniques": [
+                    "T1592",
+                    "T1190"
+                ],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "System"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "CloudApplication",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "Port"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}
