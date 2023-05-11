@@ -1,5 +1,6 @@
 //This query will return you all the SecurityIncident data from previous month
-let time_start = startofmonth(datetime(now), -2); 
-let time_end = endofmonth(datetime(now),-2); 
-SecurityIncident 
+let time_start = startofmonth(datetime(now), -1); 
+let time_end = endofmonth(datetime(now),-1); 
+SecurityIncident 
 | where TimeGenerated between (time_start .. time_end)
+| distinct IncidentNumber, Title, Severity
