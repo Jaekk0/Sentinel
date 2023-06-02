@@ -28,6 +28,12 @@ List of Detection rules per .json file:
 	 <td>16 rules (2 NRT)</td>
 	 <td>One rule has UEBA tables incluuded so remember to enable UEBA too.</td>
       </tr>
+	   <tr>
+         <td>Windows 365</td>
+         <td>ms-sentinel-windows365-detection-rules-02062023</td>
+	 <td>14 rules</td>
+	 <td></td>
+      </tr>
       <tr>
          <td></td>
          <td></td>
