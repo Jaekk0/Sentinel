@@ -35,6 +35,11 @@ List of Detection rules per .json file:
 	 <td></td>
       </tr>
       <tr>
+         <td>Defender 365</td>
+         <td>ms-sentinel-microsoftdefender365-detection-rules-02062023</td>
+	 <td>9 rules</td>
+	 <td>One rule has UEBA tables incluuded so remember to enable UEBA too.</td>
+      <tr>
          <td></td>
          <td></td>
 	 <td></td>
