@@ -1,0 +1,712 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/83d5cf32-ee3e-4d8f-9ad9-1f60ecf82b67')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/83d5cf32-ee3e-4d8f-9ad9-1f60ecf82b67')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "Possible Phishing with CSL and Network Sessions",
+                "description": "This query looks for malicious URL clicks in phishing email recognized by MDO in correlation with CommonSecurityLogs(CSL) & NetworkSession events. \nIf your workspace doesnt have one of the many data sources required for ASIM it may give informational error which can be safely ignored.",
+                "severity": "Medium",
+                "enabled": false,
+                "query": "//SuspiciousUrlClicked\nAlertEvidence\n| where ServiceSource =~ \"Microsoft Defender for Office 365\"\n| where EntityType =~ \"Url\"\n| project AlertId, RemoteUrl\n| join (\nAlertEvidence\n| where ServiceSource =~ \"Microsoft Defender for Office 365\"\n| where EntityType =~ \"MailMessage\"\n| project AlertId, NetworkMessageId\n)\non AlertId\n| distinct RemoteUrl, NetworkMessageId\n| join EmailEvents on NetworkMessageId\n| distinct RemoteUrl, NetworkMessageId, RecipientEmailAddress, RecipientObjectId\n| join kind = inner IdentityInfo on $left.RecipientObjectId  == $right.AccountObjectId\n| distinct RemoteUrl, NetworkMessageId, RecipientEmailAddress , RecipientObjectId, AccountSID\n| join kind = inner  \n(DeviceEvents\n| where ActionType =~ \"BrowserLaunchedToOpenUrl\"| where isnotempty(RemoteUrl)\n| project  UrlClickedByUserSid = RemoteUrl,\nInitiatingProcessAccountSid, DeviceName, DeviceId, InitiatingProcessFileName, InitiatingProcessAccountName\n)\non $left.AccountSID == $right.InitiatingProcessAccountSid and $left.RemoteUrl == $right.UrlClickedByUserSid\n| distinct  RemoteUrl, NetworkMessageId, RecipientEmailAddress, RecipientObjectId,\n AccountSID, UrlClickedByUserSid, DeviceName, DeviceId, InitiatingProcessFileName, InitiatingProcessAccountName\n|  join kind=inner\n(\n//Suspicious url clicked found in common security logs\nCommonSecurityLog\n| project TimeGenerated, DeviceVendor, DeviceProduct, DeviceAction, DestinationDnsDomain, DestinationIP, RequestURL, SourceIP, SourceHostName, RequestClientApplication\n) on $left.RemoteUrl== $right.RequestURL\n|  join kind=inner\n(\n//Find the relevant network sessions\n_Im_NetworkSession\n| where isnotempty(DstIpAddr)\n| where not(ipv4_is_private(DstIpAddr))\n| project TimeGenerated, SrcIpAddr, SrcPortNumber, DstIpAddr, DstPortNumber, DstBytes, SrcBytes\n) on  $left.DestinationIP == $right.DstIpAddr //The relevant network session being projected \n| summarize count() by TimeGenerated, RecipientEmailAddress, UrlClickedByUserSid, InitiatingProcessAccountName, DeviceName, InitiatingProcessFileName,DeviceProduct, DeviceAction, SourceIP, DestinationIP, RequestClientApplication\n| extend HostName = iff(DeviceName has '.', substring(DeviceName,0,indexof(DeviceName,'.')),DeviceName)\n| extend DnsDomain = iff(DeviceName has '.', substring(DeviceName,indexof(DeviceName,'.')+1),\"\")\n| extend Name = tostring(split(InitiatingProcessAccountName,'@',0)[0]), UPNSuffix = tostring(split(InitiatingProcessAccountName,'@',1)[0])\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess",
+                    "CommandAndControl"
+                ],
+                "techniques": [
+                    "T1566",
+                    "T1102"
+                ],
+                "alertRuleTemplateName": "6c3a1258-bcdd-4fcd-b753-1a9bc826ce12",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "Name"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "UPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "HostName"
+                            },
+                            {
+                                "identifier": "DnsDomain",
+                                "columnName": "DnsDomain"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "SourceIP"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "DestinationIP"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.1"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/cdf88ec1-28e2-4467-88f2-d6bd34dde69e')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/cdf88ec1-28e2-4467-88f2-d6bd34dde69e')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "SUNBURST network beacons",
+                "description": "Identifies SolarWinds SUNBURST domain beacon IOCs in DeviceNetworkEvents\nReferences:\n- https://www.fireeye.com/blog/threat-research/2020/12/evasive-attacker-leverages-solarwinds-supply-chain-compromises-with-sunburst-backdoor.html\n- https://gist.github.com/olafhartong/71ffdd4cab4b6acd5cbcd1a0691ff82f",
+                "severity": "Medium",
+                "enabled": false,
+                "query": "let SunburstURL=dynamic([\"panhardware.com\",\"databasegalore.com\",\"avsvmcloud.com\",\"freescanonline.com\",\"thedoccloud.com\",\"deftsecurity.com\"]);\nDeviceNetworkEvents\n| where ActionType == \"ConnectionSuccess\"\n| where RemoteUrl in(SunburstURL)\n| extend timestamp = TimeGenerated,AccountEntity = iff(isnotempty(InitiatingProcessAccountUpn), InitiatingProcessAccountUpn, InitiatingProcessAccountName),HashAlgorithm = 'MD5'\n| extend HostName = tostring(split(DeviceName, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(DeviceName, '.'), 1, -1), '.'))\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Execution",
+                    "Persistence",
+                    "InitialAccess"
+                ],
+                "techniques": [
+                    "T1195",
+                    "T1059",
+                    "T1546"
+                ],
+                "alertRuleTemplateName": "ce1e7025-866c-41f3-9b08-ec170e05e73e",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "HostName"
+                            },
+                            {
+                                "identifier": "DnsDomain",
+                                "columnName": "DnsDomain"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "RemoteIP"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "URL",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Url",
+                                "columnName": "RemoteUrl"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "FileHash",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Algorithm",
+                                "columnName": "HashAlgorithm"
+                            },
+                            {
+                                "identifier": "Value",
+                                "columnName": "InitiatingProcessMD5"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.4"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/84faa2f4-f5e6-42d3-8cff-8572abaa5bf7')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/84faa2f4-f5e6-42d3-8cff-8572abaa5bf7')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "AV detections related to Ukraine threats",
+                "description": "This query looks for Microsoft Defender AV detections for malware observed in relation to the war in Ukraine.\n  Ref: https://msrc-blog.microsoft.com/2022/02/28/analysis-resources-cyber-threat-activity-ukraine/ ",
+                "severity": "High",
+                "enabled": false,
+                "query": "let UA_threats = dynamic([\"FoxBlade\", \"WhisperGate\", \"Lasainraw\", \"SonicVote\", \"CaddyWiper\", \"AprilAxe\", \"FiberLake\", \"Industroyer\", \"DesertBlade\"]);\n  SecurityAlert\n  | where ProviderName =~ \"MDATP\"\n  | extend ThreatFamilyName = tostring(parse_json(ExtendedProperties).ThreatFamilyName)\n  | where ThreatFamilyName in~ (UA_threats)\n  | extend HostName = iff(CompromisedEntity has '.', substring(CompromisedEntity,0,indexof(CompromisedEntity,'.')),CompromisedEntity)\n  | extend DnsDomain = iff(CompromisedEntity has '.', substring(CompromisedEntity,indexof(CompromisedEntity,'.')+1),\"\")\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [
+                    "T1485"
+                ],
+                "alertRuleTemplateName": "b6685757-3ed1-4b05-a5bd-2cacadc86c2a",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "HostName"
+                            },
+                            {
+                                "identifier": "DnsDomain",
+                                "columnName": "DnsDomain"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.1.2"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/2345cda6-d941-4e79-98c0-d4c93546e96b')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/2345cda6-d941-4e79-98c0-d4c93546e96b')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "SUNBURST and SUPERNOVA backdoor hashes",
+                "description": "Identifies SolarWinds SUNBURST and SUPERNOVA backdoor file hash IOCs in DeviceFileEvents\nReferences:\n- https://www.fireeye.com/blog/threat-research/2020/12/evasive-attacker-leverages-solarwinds-supply-chain-compromises-with-sunburst-backdoor.html\n- https://gist.github.com/olafhartong/71ffdd4cab4b6acd5cbcd1a0691ff82f",
+                "severity": "High",
+                "enabled": false,
+                "query": "let SunburstMD5=dynamic([\"b91ce2fa41029f6955bff20079468448\",\"02af7cec58b9a5da1c542b5a32151ba1\",\"2c4a910a1299cdae2a4e55988a2f102e\",\"846e27a652a5e1bfbd0ddd38a16dc865\",\"4f2eb62fa529c0283b28d05ddd311fae\"]);\nlet SupernovaMD5=\"56ceb6d0011d87b6e4d7023d7ef85676\";\nDeviceFileEvents\n| where MD5 in(SunburstMD5) or MD5 in(SupernovaMD5)\n| extend timestamp = TimeGenerated, Account = iff(isnotempty(InitiatingProcessAccountUpn), InitiatingProcessAccountUpn, InitiatingProcessAccountName),AlgorithmEntity = \"MD5\" ,FileHashEntity = MD5\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Execution",
+                    "Persistence",
+                    "InitialAccess"
+                ],
+                "techniques": [
+                    "T1195",
+                    "T1059",
+                    "T1546"
+                ],
+                "alertRuleTemplateName": "a3c144f9-8051-47d4-ac29-ffb0c312c910",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "Account"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "DeviceName"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "FileHash",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Algorithm",
+                                "columnName": "AlgorithmEntity"
+                            },
+                            {
+                                "identifier": "Value",
+                                "columnName": "FileHashEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.6"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/114fda49-6945-4626-bdf2-f3d137606502')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/114fda49-6945-4626-bdf2-f3d137606502')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "TEARDROP memory-only dropper",
+                "description": "Identifies SolarWinds TEARDROP memory-only dropper IOCs in Window's defender Exploit Guard activity\nReferences:\n- https://www.fireeye.com/blog/threat-research/2020/12/evasive-attacker-leverages-solarwinds-supply-chain-compromises-with-sunburst-backdoor.html\n- https://gist.github.com/olafhartong/71ffdd4cab4b6acd5cbcd1a0691ff82f",
+                "severity": "High",
+                "enabled": false,
+                "query": "DeviceEvents\n| where ActionType has \"ExploitGuardNonMicrosoftSignedBlocked\"\n| where InitiatingProcessFileName has \"svchost.exe\" and FileName has \"NetSetupSvc.dll\"\n| extend timestamp = TimeGenerated, AccountEntity = iff(isnotempty(InitiatingProcessAccountUpn), InitiatingProcessAccountUpn, InitiatingProcessAccountName),FileHashType = \"SHA1\"\n| extend HostName = tostring(split(DeviceName, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(DeviceName, '.'), 1, -1), '.'))\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Execution",
+                    "Persistence",
+                    "DefenseEvasion"
+                ],
+                "techniques": [
+                    "T1543",
+                    "T1059",
+                    "T1027"
+                ],
+                "alertRuleTemplateName": "738702fd-0a66-42c7-8586-e30f0583f8fe",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "AccountEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "HostName"
+                            },
+                            {
+                                "identifier": "DnsDomain",
+                                "columnName": "DnsDomain"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "FileHash",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Algorithm",
+                                "columnName": "FileHashType"
+                            },
+                            {
+                                "identifier": "Value",
+                                "columnName": "InitiatingProcessSHA1"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.5"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/088e8a8a-42e0-4107-b672-495b48442f25')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/088e8a8a-42e0-4107-b672-495b48442f25')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "SUNSPOT malware hashes",
+                "description": "This query uses Microsoft Defender for Endpoint data to look for IoCs associated with the SUNSPOT malware shared by Crowdstrike.\nMore details: \n  - https://www.crowdstrike.com/blog/sunspot-malware-technical-analysis/ \n  - https://techcommunity.microsoft.com/t5/azure-sentinel/monitoring-your-software-build-process-with-azure-sentinel/ba-p/2140807",
+                "severity": "Medium",
+                "enabled": false,
+                "query": "let SUNSPOT_Hashes = dynamic([\"c45c9bda8db1d470f1fd0dcc346dc449839eb5ce9a948c70369230af0b3ef168\", \"0819db19be479122c1d48743e644070a8dc9a1c852df9a8c0dc2343e904da389\"]);\nunion isfuzzy=true(\nDeviceEvents\n| where InitiatingProcessSHA256 in (SUNSPOT_Hashes)),\n(DeviceImageLoadEvents\n| where InitiatingProcessSHA256 in (SUNSPOT_Hashes))\n| extend timestamp=TimeGenerated\n| extend HostName = tostring(split(DeviceName, '.', 0)[0]), DnsDomain = tostring(strcat_array(array_slice(split(DeviceName, '.'), 1, -1), '.'))\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence"
+                ],
+                "techniques": [
+                    "T1554"
+                ],
+                "alertRuleTemplateName": "53e936c6-6c30-4d12-8343-b8a0456e8429",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "HostName"
+                            },
+                            {
+                                "identifier": "DnsDomain",
+                                "columnName": "DnsDomain"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.1"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/e505cfbd-b729-47df-9ed8-13babc20955b')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/e505cfbd-b729-47df-9ed8-13babc20955b')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "AV detections related to SpringShell Vulnerability",
+                "description": "This query looks for Microsoft Defender AV detections related to the SpringShell vulnerability. In Microsoft Sentinel, the SecurityAlerts table includes only the Device Name of the affected device.\n  This query joins the DeviceInfo table to clearly connect other information such as device group, IP, logged-on users, etc. This would allow the Microsoft Sentinel analyst to have more context related to the alert, if available.\n  Reference: https://www.microsoft.com/security/blog/2022/04/04/springshell-rce-vulnerability-guidance-for-protecting-against-and-detecting-cve-2022-22965/",
+                "severity": "High",
+                "enabled": false,
+                "query": "let SpringShell_threats = dynamic([\"Trojan:Python/SpringShellExpl\", \"Exploit:Python/SpringShell\", \"Backdoor:PHP/Remoteshell.V\", \"SpringShell\"]);\nDeviceInfo\n| extend DeviceName = tolower(DeviceName)\n| join kind=inner ( SecurityAlert\n| where ProviderName =~ \"MDATP\"\n| extend ThreatName = tostring(parse_json(ExtendedProperties).ThreatName)\n| extend ThreatFamilyName = tostring(parse_json(ExtendedProperties).ThreatFamilyName)\n| where ThreatName in~ (SpringShell_threats) or ThreatFamilyName in~ (SpringShell_threats)\n| extend CompromisedEntity = tolower(CompromisedEntity)\n) on $left.DeviceName == $right.CompromisedEntity\n| summarize by DisplayName, ThreatName, ThreatFamilyName, PublicIP, AlertSeverity, Description, tostring(LoggedOnUsers), DeviceId, TenantId , bin(TimeGenerated, 1d), CompromisedEntity, tostring(LoggedOnUsers), ProductName, Entities\n| extend HostName = iff(CompromisedEntity has '.', substring(CompromisedEntity,0,indexof(CompromisedEntity,'.')),CompromisedEntity)\n| extend DnsDomain = iff(CompromisedEntity has '.', substring(CompromisedEntity,indexof(CompromisedEntity,'.')+1),\"\")\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess"
+                ],
+                "techniques": [
+                    "T1190"
+                ],
+                "alertRuleTemplateName": "3bd33158-3f0b-47e3-a50f-7c20a1b88038",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "HostName"
+                            },
+                            {
+                                "identifier": "DnsDomain",
+                                "columnName": "DnsDomain"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "PublicIP"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.2"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/71f4e9ef-8409-4aeb-ad35-ae4a6f44e0a3')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/71f4e9ef-8409-4aeb-ad35-ae4a6f44e0a3')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "Potential Build Process Compromise - MDE",
+                "description": "The query looks for source code files being modified immediately after a build process is started. The purpose of this is to look for malicious code injection during the build process. This query uses Microsoft Defender for Endpoint telemetry.\nMore details: https://techcommunity.microsoft.com/t5/azure-sentinel/monitoring-the-software-supply-chain-with-azure-sentinel/ba-p/2176463",
+                "severity": "Medium",
+                "enabled": false,
+                "query": "// How far back to look for events from\nlet timeframe = 1d;\n// How close together build events and file modifications should occur to alert (make this smaller to reduce FPs)\nlet time_window = 5m;\n// Edit this to include build processes used\nlet build_processes = dynamic([\"MSBuild.exe\", \"dotnet.exe\", \"VBCSCompiler.exe\"]);\n// Include any processes that you want to allow to edit files during/around the build process\nlet allow_list = dynamic([]);\nDeviceProcessEvents\n| where TimeGenerated > ago(timeframe)\n// Look for build process starts\n| where FileName has_any (build_processes)\n| summarize by BuildParentProcess=InitiatingProcessFileName, BuildProcess=FileName, BuildAccount = AccountName, DeviceName, BuildCommand=ProcessCommandLine, timekey= bin(TimeGenerated, time_window), BuildProcessTime=TimeGenerated\n| join kind=inner(\nDeviceFileEvents\n| where TimeGenerated > ago(timeframe)\n| where InitiatingProcessFileName !in (allow_list)\n| where ActionType == \"FileCreated\"  or ActionType == \"FileModified\"\n// Look for code files, edit this to include file extensions used in build.\n| where FileName endswith \".cs\" or FileName endswith \".cpp\"\n| summarize by FileEditParentProcess=InitiatingProcessParentFileName, FileEditAccount = InitiatingProcessAccountName, DeviceName, FileEdited=FileName, FileEditProcess=InitiatingProcessFileName, timekey= bin(TimeGenerated, time_window), FileEditTime=TimeGenerated)\n// join where build processes and file modifications seen at same time on same host\non timekey, DeviceName\n// Limit to only where the file edit happens after the build process starts\n| where BuildProcessTime <= FileEditTime\n| summarize make_set(FileEdited), make_set(FileEditProcess), make_set(FileEditAccount) by timekey, DeviceName, BuildParentProcess, BuildProcess\n| extend HostName = iff(DeviceName has '.', substring(DeviceName,0,indexof(DeviceName,'.')),DeviceName)\n| extend DnsDomain = iff(DeviceName has '.', substring(DeviceName,indexof(DeviceName,'.')+1),\"\")\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence"
+                ],
+                "techniques": [
+                    "T1554"
+                ],
+                "alertRuleTemplateName": "1bf6e165-5e32-420e-ab4f-0da8558a8be2",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "HostName"
+                            },
+                            {
+                                "identifier": "DnsDomain",
+                                "columnName": "DnsDomain"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.1"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/14788e3b-851e-47f4-a679-9718c2527c86')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/14788e3b-851e-47f4-a679-9718c2527c86')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-09-01-preview",
+            "properties": {
+                "displayName": "AV detections related to Tarrask malware",
+                "description": "This query looks for Microsoft Defender AV detections related to Tarrask malware. In Microsoft Sentinel, the SecurityAlerts table \n includes only the Device Name of the affected device, this query joins the DeviceInfo table to clearly connect other information such as Device group, ip, logged-on users etc. \n This would allow the Microsoft Sentinel analyst to have more context related to the alert, if available.\n Reference: https://www.microsoft.com/security/blog/2022/04/12/tarrask-malware-uses-scheduled-tasks-for-defense-evasion/",
+                "severity": "High",
+                "enabled": false,
+                "query": "let Tarrask_threats = dynamic([\"HackTool:Win64/Tarrask!MS\", \"HackTool:Win64/Ligolo!MSR\", \"Behavior:Win32/ScheduledTaskHide.A\", \"Tarrask\"]);\nDeviceInfo\n| extend DeviceName = tolower(DeviceName)\n| join kind=rightouter ( SecurityAlert\n| where ProviderName =~ \"MDATP\"\n| extend ThreatName = tostring(parse_json(ExtendedProperties).ThreatName)\n| extend ThreatFamilyName = tostring(parse_json(ExtendedProperties).ThreatFamilyName)\n| where ThreatName in~ (Tarrask_threats) or ThreatFamilyName in~ (Tarrask_threats)\n| extend CompromisedEntity = tolower(CompromisedEntity)\n) on $left.DeviceName == $right.CompromisedEntity\n| summarize by DisplayName, ThreatName, ThreatFamilyName, PublicIP, AlertSeverity, Description, tostring(LoggedOnUsers), DeviceId, TenantId , bin(TimeGenerated, 1d), CompromisedEntity, tostring(LoggedOnUsers), ProductName, Entities\n| extend HostName = iff(CompromisedEntity has '.', substring(CompromisedEntity,0,indexof(CompromisedEntity,'.')),CompromisedEntity)\n| extend DnsDomain = iff(CompromisedEntity has '.', substring(CompromisedEntity,indexof(CompromisedEntity,'.')+1),\"\")\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence"
+                ],
+                "techniques": [
+                    "T1053"
+                ],
+                "alertRuleTemplateName": "1785d372-b9fe-4283-96a6-3a1d83cabfd1",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "HostName",
+                                "columnName": "HostName"
+                            },
+                            {
+                                "identifier": "DnsDomain",
+                                "columnName": "DnsDomain"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "PublicIP"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.2"
+            }
+        }
+    ]
+}
