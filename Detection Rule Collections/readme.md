@@ -50,14 +50,7 @@ List of Detection rules per .json file:
          <td>Windows 365</td>
          <td>ms-sentinel-windows365-detection-rules-02062023</td>
 	 <td>14 rules</td>
-	 <td></td>
-      </tr>
-
-         <td></td>
-         <td></td>
-	 <td></td>
-	 <td></td>
-      </tr>      
+	 <td></td>   
    </tbody>
 </table>
 
