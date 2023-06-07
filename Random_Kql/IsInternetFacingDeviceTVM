@@ -1,0 +1,11 @@
+//Find devices that are internet facing
+let IsInternetFacingDevice=
+DeviceInfo
+| where IsInternetFacing
+| extend InternetFacingInfo  = AdditionalFields
+| extend InternetFacingReason = extractjson("$.InternetFacingReason", InternetFacingInfo, typeof(string)), InternetFacingLocalPort = extractjson("$.InternetFacingLocalPort", InternetFacingInfo, typeof(int)), InternetFacingScannedPublicPort = extractjson("$.InternetFacingScannedPublicPort", InternetFacingInfo, typeof(int)), InternetFacingScannedPublicIp = extractjson("$.InternetFacingScannedPublicIp", InternetFacingInfo, typeof(string)), InternetFacingLocalIp = extractjson("$.InternetFacingLocalIp", InternetFacingInfo, typeof(string)),   InternetFacingTransportProtocol=extractjson("$.InternetFacingTransportProtocol", InternetFacingInfo, typeof(string)), InternetFacingLastSeen = extractjson("$.InternetFacingLastSeen", InternetFacingInfo, typeof(datetime))
+| summarize arg_max(Timestamp, *) by DeviceName;
+DeviceTvmSoftwareVulnerabilitiesKB
+| join DeviceTvmSoftwareVulnerabilities on CveId
+| where DeviceName in (IsInternetFacingDevice)
+| project-away CveId1, VulnerabilitySeverityLevel1, AffectedSoftware
