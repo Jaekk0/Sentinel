@@ -1,0 +1,30 @@
+//list all Mitre tactics on Sentinel and Defender alerts
+//Original idea from: https://github.com/LearningKijo/KQL/blob/main/KQL-XDR-Hunting/XDR-Microsoft-365-Defender/XDR-MITRE-ATTCK-pivot.yaml
+(union isfuzzy=true
+(SecurityAlert
+    | where TimeGenerated > ago(30d)
+    | where ProviderName == "ASI Scheduled Alerts"
+    | where isnotempty(Tactics) and Tactics != "Unknown"
+    | summarize arg_max(TimeGenerated, *) by SystemAlertId
+    | extend ['Event Source'] = "SecurityAlert"
+    | extend ['ServiceSource'] = "Microsoft Sentinel"
+    | project-rename Title=DisplayName, DetailedAttackTechniques=Tactics
+    | project DetailedAttackTechniques, Title, ['Event Source'], ['ServiceSource']
+),
+(AlertInfo
+    | where TimeGenerated > ago(30d)
+    | where ServiceSource in ("AAD Identity Protection", "Microsoft Defender for Endpoint", "Microsoft Defender for Office 365", "Microsoft Defender for Identity", "Microsoft Cloud App Security", "Microsoft 365 Defender")
+    | where isnotempty(AttackTechniques)
+    //| mv-expand DetailedAttackTechniques= parse_json(AttackTechniques)
+    | mv-expand todynamic(AttackTechniques)
+    | extend DetailedAttackTechniques = tostring(AttackTechniques)
+    | extend ['Event Source'] = "AlertInfo"
+    | project ServiceSource, DetailedAttackTechniques, Title, ['Event Source']
+    //| evaluate pivot(ServiceSource)
+)
+//Summarise only ServiceSource
+| summarize count() by ServiceSource, DetailedAttackTechniques, ['Event Source']
+| order by ServiceSource desc
+//List all Solutions
+//| project DetailedAttackTechniques, Title, ServiceSource, ['Event Source']
+)
