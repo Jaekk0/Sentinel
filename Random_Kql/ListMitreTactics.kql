@@ -20,7 +20,7 @@
     | extend ['Event Source'] = "AlertInfo"
     | project ServiceSource, DetailedAttackTechniques, Title, ['Event Source']
 )
-//Summarise only ServiceSource
+//Summarize only ServiceSource
 | summarize count() by ServiceSource, DetailedAttackTechniques, ['Event Source']
 | order by ServiceSource desc
 //List all Solutions
