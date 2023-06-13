@@ -1,0 +1,7 @@
+// This is Azure Resource Graph Explorer query
+// List all azure public IP addressess
+resources
+| where type == "microsoft.network/publicipaddresses"
+| mv-expand todynamic(properties)
+| where isnotempty(properties.ipAddress)
+| project ['id'], name, location, resourceGroup, subscriptionId, properties.ipAddress, ['tags']
