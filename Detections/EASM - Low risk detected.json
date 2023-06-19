@@ -1,0 +1,89 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/bba5bdea-f129-4c4a-ac97-b5d37647b000')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/bba5bdea-f129-4c4a-ac97-b5d37647b000')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-11-01-preview",
+            "properties": {
+                "displayName": "EASM - Low risk detected",
+                "description": "This Analytics rule monitors Microsoft External Attack Surface table “EasmRisk_CL”. The Observations tab displays any insights from the Attack Surface Priorities dashboard that pertain to the asset. These priorities can include critical CVEs, known associations to compromised infrastructure, use of deprecated technology, infrastructure best practice violations, or compliance issues. For each observation, Defender EASM provides the name of the observation, categorizes it by type, assigns a priority, and lists both CVSS v2 and v3 scores where applicable. Read more: https://learn.microsoft.com/en-us/azure/external-attack-surface-management/understanding-asset-details#observations\nSome insights will be flagged with \"Potential\" in the title. A \"Potential\" insight occurs when Defender EASM is unable to confirm that an asset is impacted by a vulnerability. This is common when our scanning system detects the presence of a specific service but cannot detect the version number; for example, some services enable administrators to hide version information. Read more: https://learn.microsoft.com/en-us/azure/external-attack-surface-management/understanding-dashboards#attack-surface-priorities \n",
+                "severity": "Low",
+                "enabled": true,
+                "query": "EasmRisk_CL\r\n| where CategoryName_s == \"Low Severity\"\r\n| mv-expand todynamic(AssetDiscoveryAuditTrail_s)\r\n| extend Asset = tostring(AssetDiscoveryAuditTrail_s.AssetType)\r\n| extend Type = tostring(AssetDiscoveryAuditTrail_s.AssetName)\r\n| project TimeGenerated, CategoryName_s, MetricDisplayName_s, WorkspaceName_s, Type, Asset, AssetDescription_s\r\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT5H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Reconnaissance"
+                ],
+                "techniques": [
+                    "T1595",
+                    "T1591",
+                    "T1594"
+                ],
+                "alertRuleTemplateName": null,
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "AzureResource",
+                        "fieldMappings": [
+                            {
+                                "identifier": "ResourceId",
+                                "columnName": "AssetDescription_s"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "URL",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Url",
+                                "columnName": "AssetDescription_s"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "DNS",
+                        "fieldMappings": [
+                            {
+                                "identifier": "DomainName",
+                                "columnName": "Asset"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": null
+            }
+        }
+    ]
+}
