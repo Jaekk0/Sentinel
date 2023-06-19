@@ -1,0 +1,31 @@
+let rareportlist = 
+dynamic([
+"21", //ftp
+"22", //ssh
+"23", //telnet
+"25", //smtp
+"53", //domain name system
+"110", //pop3
+"111", //rpcbind
+"135", //msrpc
+"139", //netbios-ssn
+"143", //imap
+"445", //microsoft-ds
+"993", //imaps
+"995", //pop3s
+"1723", //pptp
+"3306", //mysql
+"3389", //ms-wbt-server
+"5900", //vnc
+"8080" //http-proxy
+]);
+EasmHostAsset_CL
+| extend System = Host_s
+| extend EASM = parse_json(Ports_s)
+| extend Source = 'EasmHostAsset_CL'
+| mv-expand EASM
+| extend Port = tostring(EASM.Port)
+| extend LastPortState = EASM.LastPortState
+| where Port  in (rareportlist)
+| where LastPortState == "OPEN"
+| project System, Port, LastPortState, Source, TimeGenerated
