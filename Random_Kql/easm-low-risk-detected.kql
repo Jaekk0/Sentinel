@@ -1,0 +1,6 @@
+EasmRisk_CL
+| where CategoryName_s == "Low Severity"
+| mv-expand todynamic(AssetDiscoveryAuditTrail_s)
+| extend Asset = tostring(AssetDiscoveryAuditTrail_s.AssetType)
+| extend Type = tostring(AssetDiscoveryAuditTrail_s.AssetName)
+| project TimeGenerated, CategoryName_s, MetricDisplayName_s, WorkspaceName_s, Type, Asset, AssetDescription_s
