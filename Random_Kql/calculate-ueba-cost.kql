@@ -1,0 +1,6 @@
+Usage
+| where TimeGenerated > ago(30d)
+| where DataType in ("SigninLogs", "AuditLogs", "AzureActivity", "SecurityEvent")//Data Sources for UEBA
+| summarize ['Table Size'] =sum(Quantity) / 1000. by DataType
+| extend UEBAGB = 0.1*['Table Size'] //UEBA estimation
+| order by UEBAGB desc
