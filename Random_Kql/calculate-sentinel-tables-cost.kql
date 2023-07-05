@@ -1,0 +1,42 @@
+//Calculate cost of Sentinel OfficeActivity table
+Usage
+| where TimeGenerated > ago(30d) //Timeframe
+| where _IsBillable == false // Not billed table
+| where DataType == "OfficeActivity" //Office tables
+| summarize TotalVolumeGB = sum(Quantity) / 1000  // Calculate total data of 30 days
+| extend  DailyVolumeGB = TotalVolumeGB / 30 // Calculate daily data ingestion
+| project TotalVolumeGB, DailyVolumeGB // Poject results 
+
+//Calculate cost of Sentinel CloudAppEvents table
+Usage
+| where TimeGenerated > ago(30d) //Timeframe
+| where IsBillable == true  // Billed table but included in E5 offer
+| where DataType == "CloudAppEvents" //CloudAppEvents
+| summarize TotalVolumeGB = sum(Quantity) / 1000  // Calculate total data of 30 days
+| extend  DailyVolumeGB = TotalVolumeGB / 30 // Calculate daily data ingestion
+| project TotalVolumeGB, DailyVolumeGB // Poject results  
+
+// Example to visualise the data
+Usage
+| where TimeGenerated > ago(30d) //Timeframe
+| where _IsBillable == false // Not billed table
+| where DataType == "OfficeActivity" //Office tables
+| summarize TotalVolumeGB = sum(Quantity) / 1000 by bin(TimeGenerated, 1d) // Calculate daily data ingestion
+| sort by TimeGenerated asc 
+| render timechart 
+
+// All data types together
+Usage
+| where TimeGenerated > ago(30d) //Timeframe
+| where DataType in ("MicrosoftPurviewInformationProtection", "OfficeActivity", "CloudAppEvents")
+| summarize TotalVolumeGB = sum(Quantity) / 1000  // Calculate total data of 30 days
+| extend  DailyVolumeGB = TotalVolumeGB / 30 // Calculate daily data ingestion
+| project TotalVolumeGB, DailyVolumeGB // Poject results  
+
+// All data types to visualise the data
+Usage
+| where TimeGenerated > ago(30d) //Timeframe
+| where DataType in ("MicrosoftPurviewInformationProtection", "OfficeActivity", "CloudAppEvents")
+| summarize TotalVolumeGB = sum(Quantity) / 1000 by bin(TimeGenerated, 1d) // Calculate daily data ingestion
+| sort by TimeGenerated asc 
+| render timechart 
