@@ -1,0 +1,4 @@
+// Find succeed operations to LogAnalytics workspace
+Operation
+| where OperationCategory == "Workspace Configuration"
+| where OperationStatus == "Succeeded"
