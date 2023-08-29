@@ -52,10 +52,10 @@ List of Detection rules per .json file:
 	 <td>13 rules</td>
 	 <td>Threat Intelligence rule templates for data connectors: Microsoft 365, Microsoft 365 Defender, Microsoft Defender for Cloud, Azure Active Directory, Azure Activity and Azure Key Vault</td>
       <tr>
-         <td>Defender 365</td>
-         <td>ms-sentinel-microsoftdefender365-detection-rules-02062023</td>
+         <td>Windows 365</td>
+         <td>ms-sentinel-microsoft365-detection-rules-02062023</td>
 	 <td>9 rules</td>
-	 <td>One rule has UEBA tables incluuded so remember to enable UEBA too.</td>
+	 <td></td>
       <tr>
       <tr>	      
 	   <tr>
