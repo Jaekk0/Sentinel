@@ -1,0 +1,223 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/4dd7e70e-6990-453b-b6d7-5c5c4650cb95')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/4dd7e70e-6990-453b-b6d7-5c5c4650cb95')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-11-01-preview",
+            "properties": {
+                "displayName": "SUPERNOVA webshell",
+                "description": "Identifies SUPERNOVA webshell based on W3CIISLog data.\n References:\n - https://unit42.paloaltonetworks.com/solarstorm-supernova/",
+                "severity": "High",
+                "enabled": false,
+                "query": "W3CIISLog\n| where csMethod == 'GET'\n| where isnotempty(csUriStem) and isnotempty(csUriQuery)\n| where csUriStem contains \"logoimagehandler.ashx\"\n| where csUriQuery contains \"codes\" and csUriQuery contains \"clazz\" and csUriQuery contains \"method\" and csUriQuery contains \"args\"\n| extend timestamp = TimeGenerated, IPCustomEntity = cIP, HostCustomEntity = Computer, AccountCustomEntity = csUserName\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence",
+                    "CommandAndControl"
+                ],
+                "techniques": [
+                    "T1505",
+                    "T1071"
+                ],
+                "alertRuleTemplateName": "2acc91c3-17c2-4388-938e-4eac2d5894e8",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "HostCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.3"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/57886b1b-3c3f-4440-8695-9e79bc914fdb')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/57886b1b-3c3f-4440-8695-9e79bc914fdb')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-11-01-preview",
+            "properties": {
+                "displayName": "Malicious web application requests linked with Microsoft Defender for Endpoint (formerly Microsoft Defender ATP) alerts",
+                "description": "Takes Microsoft Defender for Endpoint (formerly Microsoft Defender ATP) alerts where web scripts are present in the evidence and correlates with requests made to those scripts\nin the WCSIISLog to surface new alerts for potentially malicious web request activity.\nThe lookback for alerts is set to 1h and the lookback for W3CIISLogs is set to 7d. A sample set of popular web script extensions\nhas been provided in scriptExtensions that should be tailored to your environment.",
+                "severity": "Medium",
+                "enabled": false,
+                "query": "let alertTimeWindow = 1h;\nlet logTimeWindow = 7d;\n// Define script extensions that suit your web application environment - a sample are provided below\nlet scriptExtensions = dynamic([\".php\", \".jsp\", \".js\", \".aspx\", \".asmx\", \".asax\", \".cfm\", \".shtml\"]);\nlet alertData = materialize(SecurityAlert\n| where TimeGenerated > ago(alertTimeWindow)\n| where ProviderName == \"MDATP\"\n// Parse and expand the alert JSON\n| extend alertData = parse_json(Entities)\n| mvexpand alertData);\nlet fileData = alertData\n// Extract web script files from MDATP alerts - our malicious web scripts - candidate webshells\n| where alertData.Type =~ \"file\"\n| where alertData.Name has_any(scriptExtensions)\n| extend FileName = tostring(alertData.Name), Directory = tostring(alertData.Directory);\nlet hostData = alertData\n// Extract server details from alerts and map to alert id\n| where alertData.Type =~ \"host\"\n| project HostName = tostring(alertData.HostName), DnsDomain = tostring(alertData.DnsDomain), SystemAlertId\n| distinct HostName, DnsDomain, SystemAlertId;\n// Join the files on their impacted servers\nlet webshellData = fileData\n| join kind=inner (hostData) on SystemAlertId\n| project TimeGenerated, FileName, Directory, HostName, DnsDomain;\nwebshellData\n| join (\n// Find requests that were made to this file on the impacted server in the W3CIISLog table\nW3CIISLog\n| where TimeGenerated > ago(logTimeWindow)\n// Restrict to accesses to script extensions\n| where csUriStem has_any(scriptExtensions)\n| extend splitUriStem = split(csUriStem, \"/\")\n| extend FileName = splitUriStem[-1], HostName = sComputerName\n// Summarize potential attacker activity\n| summarize count(), StartTime=min(TimeGenerated), EndTime=max(TimeGenerated), RequestUserAgents=make_set(csUserAgent), ReqestMethods=make_set(csMethod), RequestStatusCodes=make_set(scStatus), RequestCookies=make_set(csCookie), RequestReferers=make_set(csReferer), RequestQueryStrings=make_set(csUriQuery) by AttackerIP=cIP, SiteName=sSiteName, ShellLocation=csUriStem, tostring(FileName), HostName\n) on FileName, HostName\n| project StartTime, EndTime, AttackerIP, RequestUserAgents, HostName, SiteName, ShellLocation, ReqestMethods, RequestStatusCodes, RequestCookies, RequestReferers, RequestQueryStrings, RequestCount = count_\n// Expose the attacker ip address as a custom entity\n| extend timestamp=StartTime, IPCustomEntity = AttackerIP, HostCustomEntity = HostName\n",
+                "queryFrequency": "PT1H",
+                "queryPeriod": "P7D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Persistence"
+                ],
+                "techniques": [
+                    "T1505"
+                ],
+                "alertRuleTemplateName": "fbfbf530-506b-49a4-81ad-4030885a195c",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "HostCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "IPCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.2"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/5480b1c8-737a-4391-a1e9-7050c6250b75')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/5480b1c8-737a-4391-a1e9-7050c6250b75')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-11-01-preview",
+            "properties": {
+                "displayName": "Identify SysAid Server web shell creation",
+                "description": "This query looks for potential webshell creation by the threat actor Mercury after the sucessful exploitation of SysAid server. \nReference:  https://www.microsoft.com/security/blog/2022/08/25/mercury-leveraging-log4j-2-vulnerabilities-in-unpatched-systems-to-target-israeli-organizations/",
+                "severity": "High",
+                "enabled": false,
+                "query": "let timeframe = 1d;\nlet time_window = 5m;\n(union isfuzzy=true\n(SecurityEvent\n| where TimeGenerated > ago(timeframe)\n| where EventID == 4688\n| where Process has_any (\"java.exe\", \"javaw.exe\") and CommandLine has \"SysAidServer\" \n| summarize by ParentProcessName,Process, Account, Computer, CommandLine, timekey= bin(TimeGenerated, time_window), TimeGenerated, SubjectLogonId\n| join kind=inner(\nSecurityEvent\n| where TimeGenerated > ago(timeframe)\n| where EventID == 4663\n| where Process has_any (\"java.exe\", \"javaw.exe\")\n| where AccessMask in ('0x2','0x100', '0x10', '0x4')\n| where ObjectName endswith \".jsp\" \n| summarize by ParentProcessName, Account, Computer, ObjectName, ProcessName, timekey= bin(TimeGenerated, time_window), TimeGenerated, SubjectLogonId)\n on timekey, Computer, SubjectLogonId\n| extend timestamp = TimeGenerated, AccountCustomEntity = Account, HostCustomEntity = Computer\n),\n(DeviceFileEvents \n| where InitiatingProcessFileName has_any (\"java.exe\", \"javaw.exe\")  \n| where InitiatingProcessCommandLine has \"SysAidServer\"  \n| where FileName endswith \".jsp\" \n| extend timestamp = TimeGenerated, AccountCustomEntity = InitiatingProcessAccountName, HostCustomEntity = DeviceName\n),\n(imFileEvent\n| where TimeGenerated > ago(timeframe)\n| where EventType == \"FileCreated\"\n| where ActingProcessName has_any (\"java.exe\", \"javaw.exe\") \n| where ActingProcessCommandLine has \"SysAidServer\"  \n| where FilePath endswith \".jsp\" \n| extend timestamp = TimeGenerated, AccountCustomEntity = ActorUsername, HostCustomEntity = DvcHostname\n)\n)\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "InitialAccess"
+                ],
+                "techniques": [
+                    "T1190"
+                ],
+                "alertRuleTemplateName": "50eb4cbd-188f-44f4-b964-bab84dcdec10",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "AccountCustomEntity"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "Host",
+                        "fieldMappings": [
+                            {
+                                "identifier": "FullName",
+                                "columnName": "HostCustomEntity"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.1"
+            }
+        }
+    ]
+}
