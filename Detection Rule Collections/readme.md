@@ -51,12 +51,18 @@ List of Detection rules per .json file:
          <td>ms-sentinel-threatintelligence-1-detection-rules-06062023</td>
 	 <td>13 rules</td>
 	 <td>Threat Intelligence rule templates for data connectors: Microsoft 365, Microsoft 365 Defender, Microsoft Defender for Cloud, Azure Active Directory, Azure Activity and Azure Key Vault</td>
+      <tr>
+         <td>Defender 365</td>
+         <td>ms-sentinel-microsoftdefender365-detection-rules-02062023</td>
+	 <td>9 rules</td>
+	 <td>One rule has UEBA tables incluuded so remember to enable UEBA too.</td>
+      <tr>
       <tr>	      
 	   <tr>
-         <td>Windows 365</td>
-         <td>ms-sentinel-windows365-detection-rules-02062023</td>
-	 <td>14 rules</td>
-	 <td></td>   
+         <td>Web Shells Threat Protection</td>
+         <td>ms-sentinel-web-shells-threat-protection-detection-rules-29082023</td>
+	 <td>3 rules</td>
+	 <td>Defender 365 connector needs to be enabled before use.</td>   
    </tbody>
 </table>
 
