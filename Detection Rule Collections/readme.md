@@ -35,6 +35,12 @@ List of Detection rules per .json file:
 	 <td></td>
       </tr>
       <tr>
+         <td>Azure Key Vault</td>
+         <td>ms-sentinel-key-vault-detection-rules-29082023</td>
+	 <td>4 rules</td>
+	 <td>Azure Key Vault connector needs to be enabled before use.</td>
+      <tr>
+      <tr>
          <td>Defender 365</td>
          <td>ms-sentinel-microsoftdefender365-detection-rules-02062023</td>
 	 <td>9 rules</td>
