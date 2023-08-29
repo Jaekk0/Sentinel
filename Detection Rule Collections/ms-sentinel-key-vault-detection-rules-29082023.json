@@ -1,0 +1,282 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "workspace": {
+            "type": "String"
+        }
+    },
+    "resources": [
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/25a4ff37-22d8-418d-8622-34ceaa046c3a')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/25a4ff37-22d8-418d-8622-34ceaa046c3a')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-11-01-preview",
+            "properties": {
+                "displayName": "Sensitive Azure Key Vault operations",
+                "description": "Identifies when sensitive Azure Key Vault operations are used. This includes: VaultDelete, KeyDelete, SecretDelete, SecretPurge, KeyPurge, SecretBackup, KeyBackup.\nAny Backup operations should match with expected scheduled backup activity.",
+                "severity": "Low",
+                "enabled": false,
+                "query": "let SensitiveOperationList = dynamic(\n[\"VaultDelete\", \"KeyDelete\", \"SecretDelete\", \"SecretPurge\", \"KeyPurge\", \"SecretBackup\", \"KeyBackup\"]);\nAzureDiagnostics\n| where ResourceType =~ \"VAULTS\" and ResultType =~ \"Success\"\n| where OperationName in~ (SensitiveOperationList)\n| extend ResultType = column_ifexists(\"ResultType\", \"NoResultType\"), \nrequestUri_s = column_ifexists(\"requestUri_s\", \"None\"), \nidentity_claim_oid_g = column_ifexists(\"identity_claim_oid_g\", \"None\"), CallerIPAddress = column_ifexists(\"CallerIPAddress\", \"None\"), \nclientInfo_s = column_ifexists(\"clientInfo_s\", \"None\"), \nidentity_claim_upn_s = column_ifexists(\"identity_claim_upn_s\", \"None\")\n| summarize EventCount=count(), StartTimeUtc=min(TimeGenerated), EndTimeUtc=max(TimeGenerated), TimeTriggered=make_list(TimeGenerated),OperationNameList=make_set(OperationName), RequestURLList=make_set(requestUri_s), CallerIPList = make_set(CallerIPAddress),  CallerIPMax= arg_max(CallerIPAddress,*) by ResourceType, ResultType, Resource, identity_claim_upn_s, clientInfo_s\n| extend timestamp = StartTimeUtc\n| extend Name = tostring(split(identity_claim_upn_s,'@',0)[0]), UPNSuffix = tostring(split(identity_claim_upn_s,'@',1)[0])\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [
+                    "T1485"
+                ],
+                "alertRuleTemplateName": "d6491be0-ab2d-439d-95d6-ad8ea39277c5",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "Name"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "UPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "CallerIPMax"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.3"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/f57b9e4e-27a4-4117-9012-ec343283da88')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/f57b9e4e-27a4-4117-9012-ec343283da88')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "NRT",
+            "apiVersion": "2022-11-01-preview",
+            "properties": {
+                "displayName": "NRT Sensitive Azure Key Vault operations",
+                "description": "Identifies when sensitive Azure Key Vault operations are used. This includes: VaultDelete, KeyDelete, SecretDelete, SecretPurge, KeyPurge, SecretBackup, KeyBackup.\nAny Backup operations should match with expected scheduled backup activity.",
+                "severity": "Low",
+                "enabled": false,
+                "query": "let SensitiveOperationList = dynamic(\n[\"VaultDelete\", \"KeyDelete\", \"SecretDelete\", \"SecretPurge\", \"KeyPurge\", \"SecretBackup\", \"KeyBackup\"]);\nAzureDiagnostics\n| where ResourceType =~ \"VAULTS\" and ResultType =~ \"Success\"\n| where OperationName in~ (SensitiveOperationList)\n| extend ResultType = column_ifexists(\"ResultType\", \"NoResultType\"), \nrequestUri_s = column_ifexists(\"requestUri_s\", \"None\"), \nidentity_claim_oid_g = column_ifexists(\"identity_claim_oid_g\", \"None\"), CallerIPAddress = column_ifexists(\"CallerIPAddress\", \"None\"), \nclientInfo_s = column_ifexists(\"clientInfo_s\", \"None\"), \nidentity_claim_upn_s = column_ifexists(\"identity_claim_upn_s\", \"None\")\n| summarize EventCount=count(), StartTimeUtc=min(TimeGenerated), EndTimeUtc=max(TimeGenerated), TimeTriggered=make_list(TimeGenerated),OperationNameList=make_set(OperationName), RequestURLList=make_set(requestUri_s), CallerIPList = make_set(CallerIPAddress),  CallerIPMax= arg_max(CallerIPAddress,*) by ResourceType, ResultType, Resource, identity_claim_upn_s, clientInfo_s\n| extend timestamp = StartTimeUtc\n| extend Name = tostring(split(identity_claim_upn_s,'@',0)[0]), UPNSuffix = tostring(split(identity_claim_upn_s,'@',1)[0])\n",
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "tactics": [
+                    "Impact"
+                ],
+                "techniques": [
+                    "T1485"
+                ],
+                "alertRuleTemplateName": "884ead54-cb3f-4676-a1eb-b26532d6cbfd",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Name",
+                                "columnName": "Name"
+                            },
+                            {
+                                "identifier": "UPNSuffix",
+                                "columnName": "UPNSuffix"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "CallerIPMax"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.1"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/0a93fa38-3ce9-4969-a575-f3df45312bc3')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/0a93fa38-3ce9-4969-a575-f3df45312bc3')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-11-01-preview",
+            "properties": {
+                "displayName": "Mass secret retrieval from Azure Key Vault",
+                "description": "Identifies mass secret retrieval from Azure Key Vault observed by a single user. \nMass secret retrival crossing a certain threshold is an indication of credential dump operations or mis-configured applications. \nYou can tweak the EventCountThreshold based on average count seen in your environment \nand also filter any known sources (IP/Account) and useragent combinations based on historical analysis to further reduce noise",
+                "severity": "Low",
+                "enabled": false,
+                "query": "let DistinctSecretsThreshold = 10;\nlet EventCountThreshold = 50;\n// To avoid any False Positives, filtering using AppId is recommended.\n// The AppId 509e4652-da8d-478d-a730-e9d4a1996ca4 has been added in the query as it corresponds to Azure Resource Graph performing VaultGet operations for indexing and syncing all tracked resources across Azure.\n// The AppId 8cae6e77-e04e-42ce-b5cb-50d82bce26b1 has been added as it correspond to Microsoft Policy Insights Provider Data Plane performing VaultGet operations for policies checks.\nlet AllowedAppId = dynamic([\"509e4652-da8d-478d-a730-e9d4a1996ca4\",\"8cae6e77-e04e-42ce-b5cb-50d82bce26b1\"]);\nlet OperationList = dynamic([\"SecretGet\", \"KeyGet\", \"VaultGet\"]);\nAzureDiagnostics\n| where OperationName in (OperationList) and ResourceType =~ \"VAULTS\"\n| where not(identity_claim_appid_g in (AllowedAppId) and OperationName == 'VaultGet')\n| extend\n    ResultType = column_ifexists(\"ResultType\", \"\"),\n    identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g = column_ifexists(\"identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\", \"\"),\n    identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s = column_ifexists(\"identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s\", \"\"),\n    identity_claim_oid_g = column_ifexists(\"identity_claim_oid_g\", \"\"),\n    identity_claim_upn_s = column_ifexists(\"identity_claim_upn_s\", \"\")\n| extend\n    CallerObjectId = iff(isempty(identity_claim_oid_g), identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g, identity_claim_oid_g),\n    CallerObjectUPN = iff(isempty(identity_claim_upn_s), identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s, identity_claim_upn_s)\n| as _Retrievals\n| where CallerObjectId in (toscalar(\n    _Retrievals\n    | where ResultType == \"Success\"\n    | summarize Count = dcount(requestUri_s) by OperationName, CallerObjectId\n    | where Count > DistinctSecretsThreshold\n    | summarize make_set(CallerObjectId,10000)\n))\n| extend\n    requestUri_s = column_ifexists(\"requestUri_s\", \"\"),\n    id_s = column_ifexists(\"id_s\", \"\"),\n    CallerIPAddress = column_ifexists(\"CallerIPAddress\", \"\"),\n    clientInfo_s = column_ifexists(\"clientInfo_s\", \"\")\n| summarize\n    EventCount = count(),\n    StartTime = min(TimeGenerated),\n    EndTime = max(TimeGenerated),\n    ResourceList = make_set(Resource, 50),\n    OperationNameList = make_set(OperationName, 50),\n    RequestURLList = make_set(requestUri_s, 50),\n    CallerIPList = make_set(CallerIPAddress, 50),\n    clientInfo_sList = make_set(clientInfo_s, 50),\n    CallerIPMax = max(CallerIPAddress)\n    by ResourceType, ResultType, identity_claim_appid_g, CallerObjectId, CallerObjectUPN\n    | where EventCount > EventCountThreshold\n| project-reorder StartTime, EndTime, EventCount, ResourceType,identity_claim_appid_g, CallerObjectId, CallerObjectUPN, ResultType, ResourceList, OperationNameList, RequestURLList, CallerIPList, clientInfo_sList\n| extend timestamp = EndTime\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P1D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CredentialAccess"
+                ],
+                "techniques": [
+                    "T1003"
+                ],
+                "alertRuleTemplateName": "24f8c234-d1ff-40ec-8b73-96b17a3a9c1c",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "ObjectGuid",
+                                "columnName": "CallerObjectId"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "CallerIPMax"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.5"
+            }
+        },
+        {
+            "id": "[concat(resourceId('Microsoft.OperationalInsights/workspaces/providers', parameters('workspace'), 'Microsoft.SecurityInsights'),'/alertRules/fe41b5c2-6ed4-433c-835f-fadffe3e12bd')]",
+            "name": "[concat(parameters('workspace'),'/Microsoft.SecurityInsights/fe41b5c2-6ed4-433c-835f-fadffe3e12bd')]",
+            "type": "Microsoft.OperationalInsights/workspaces/providers/alertRules",
+            "kind": "Scheduled",
+            "apiVersion": "2022-11-01-preview",
+            "properties": {
+                "displayName": "Azure Key Vault access TimeSeries anomaly",
+                "description": "Indentifies a sudden increase in count of Azure Key Vault secret or vault access operations by CallerIPAddress. The query leverages a built-in KQL anomaly detection algorithm\nto find large deviations from baseline Azure Key Vault access patterns. Any sudden increase in the count of Azure Key Vault accesses can be an\nindication of adversary dumping credentials via automated methods. If you are seeing any noise, try filtering known source(IP/Account) and user-agent combinations.\nTimeSeries Reference Blog: https://techcommunity.microsoft.com/t5/azure-sentinel/looking-for-unknown-anomalies-what-is-normal-time-series/ba-p/555052",
+                "severity": "Low",
+                "enabled": false,
+                "query": "let starttime = 14d;\nlet timeframe = 1d;\nlet scorethreshold = 3;\nlet baselinethreshold = 25;\n// To avoid any False Positives, filtering using AppId is recommended. For example the AppId 509e4652-da8d-478d-a730-e9d4a1996ca4 has been added in the query as it corresponds\n// to Azure Resource Graph performing VaultGet operations for indexing and syncing all tracked resources across Azure.\nlet Allowedappid = dynamic([\"509e4652-da8d-478d-a730-e9d4a1996ca4\"]);\nlet OperationList = dynamic(\n[\"SecretGet\", \"KeyGet\", \"VaultGet\"]);\nlet TimeSeriesData = AzureDiagnostics\n| where TimeGenerated between (startofday(ago(starttime))..startofday(now()))\n| where not((identity_claim_appid_g in (Allowedappid)) and OperationName == 'VaultGet')\n  | where ResourceType =~ \"VAULTS\" and ResultType =~ \"Success\"\n| where OperationName in (OperationList)\n| extend ResultType = column_ifexists(\"ResultType\", \"None\"), CallerIPAddress = column_ifexists(\"CallerIPAddress\", \"None\")\n| where ResultType !~ \"None\" and isnotempty(ResultType)\n| where CallerIPAddress !~ \"None\" and isnotempty(CallerIPAddress)\n| project TimeGenerated, OperationName, Resource, CallerIPAddress\n| make-series HourlyCount=count() on TimeGenerated from startofday(ago(starttime)) to startofday(now()) step timeframe by CallerIPAddress;\n//Filter anomolies against TimeSeriesData\nlet TimeSeriesAlerts = TimeSeriesData\n| extend (anomalies, score, baseline) = series_decompose_anomalies(HourlyCount, scorethreshold, -1, 'linefit')\n| mv-expand HourlyCount to typeof(double), TimeGenerated to typeof(datetime), anomalies to typeof(double),score to typeof(double), baseline to typeof(long)\n| where anomalies > 0 | extend AnomalyHour = TimeGenerated\n| where baseline > baselinethreshold // Filtering low count events per baselinethreshold\n| project CallerIPAddress, AnomalyHour, TimeGenerated, HourlyCount, baseline, anomalies, score;\nlet AnomalyHours = TimeSeriesAlerts | where TimeGenerated > ago(2d) | project TimeGenerated;\n// Filter the alerts since specified timeframe\nTimeSeriesAlerts\n| where TimeGenerated > ago(2d)\n// Join against base logs since specified timeframe to retrive records associated with the hour of anomoly\n| join kind = innerunique (\nAzureDiagnostics\n| where TimeGenerated > ago(2d)\n| where not((identity_claim_appid_g in (Allowedappid)) and OperationName == 'VaultGet')\n| where ResourceType =~ \"VAULTS\" and ResultType =~ \"Success\"\n| where OperationName in (OperationList)\n| extend DateHour = bin(TimeGenerated, 1h) // create a new column and round to hour\n| where DateHour in ((AnomalyHours)) //filter the dataset to only selected anomaly hours\n| extend ResultType = column_ifexists(\"ResultType\", \"NoResultType\")\n| extend requestUri_s = column_ifexists(\"requestUri_s\", \"None\"), identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g = column_ifexists(\"identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g\", \"None\"),identity_claim_oid_g = column_ifexists(\"identity_claim_oid_g\", \"\"),\n  identity_claim_upn_s = column_ifexists(\"identity_claim_upn_s\", \"\")\n| extend\n    CallerObjectId = iff(isempty(identity_claim_oid_g), identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g, identity_claim_oid_g),\n    CallerObjectUPN = iff(isempty(identity_claim_upn_s), identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s, identity_claim_upn_s)\n| extend id_s = column_ifexists(\"id_s\", \"None\"), CallerIPAddress = column_ifexists(\"CallerIPAddress\", \"None\"), clientInfo_s = column_ifexists(\"clientInfo_s\", \"None\")\n| summarize PerOperationCount=count(), LatestAnomalyTime = arg_max(TimeGenerated,*) by bin(TimeGenerated,1h), Resource, OperationName, id_s, CallerIPAddress, identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g, identity_claim_oid_g, requestUri_s, clientInfo_s\n) on CallerIPAddress\n| extend\n    CallerObjectId = iff(isempty(identity_claim_oid_g), identity_claim_http_schemas_microsoft_com_identity_claims_objectidentifier_g, identity_claim_oid_g),\n    CallerObjectUPN = iff(isempty(identity_claim_upn_s), identity_claim_http_schemas_xmlsoap_org_ws_2005_05_identity_claims_upn_s, identity_claim_upn_s)\n| summarize EventCount=count(), OperationNameList = make_set(OperationName,1000), RequestURLList = make_set(requestUri_s, 100), AccountList = make_set(CallerObjectId, 100), AccountMax = arg_max(CallerObjectId,*) by Resource, id_s, clientInfo_s, LatestAnomalyTime\n| extend timestamp = LatestAnomalyTime\n",
+                "queryFrequency": "P1D",
+                "queryPeriod": "P14D",
+                "triggerOperator": "GreaterThan",
+                "triggerThreshold": 0,
+                "suppressionDuration": "PT1H",
+                "suppressionEnabled": false,
+                "startTimeUtc": null,
+                "tactics": [
+                    "CredentialAccess"
+                ],
+                "techniques": [
+                    "T1003"
+                ],
+                "alertRuleTemplateName": "0914adab-90b5-47a3-a79f-7cdcac843aa7",
+                "incidentConfiguration": {
+                    "createIncident": true,
+                    "groupingConfiguration": {
+                        "enabled": false,
+                        "reopenClosedIncident": false,
+                        "lookbackDuration": "PT5H",
+                        "matchingMethod": "AllEntities",
+                        "groupByEntities": [],
+                        "groupByAlertDetails": [],
+                        "groupByCustomDetails": []
+                    }
+                },
+                "eventGroupingSettings": {
+                    "aggregationKind": "SingleAlert"
+                },
+                "alertDetailsOverride": null,
+                "customDetails": null,
+                "entityMappings": [
+                    {
+                        "entityType": "Account",
+                        "fieldMappings": [
+                            {
+                                "identifier": "ObjectGuid",
+                                "columnName": "AccountMax"
+                            }
+                        ]
+                    },
+                    {
+                        "entityType": "IP",
+                        "fieldMappings": [
+                            {
+                                "identifier": "Address",
+                                "columnName": "CallerIPAddress"
+                            }
+                        ]
+                    }
+                ],
+                "sentinelEntitiesMappings": null,
+                "templateVersion": "1.0.4"
+            }
+        }
+    ]
+}
