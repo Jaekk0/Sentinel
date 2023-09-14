@@ -1,0 +1,9 @@
+//EntraID audit logs to search user accounts enabled
+AuditLogs
+| where OperationName == "Enable account"
+| mv-expand todynamic(TargetResources)
+| extend UserEnabled = tostring(TargetResources.modifiedProperties)
+| extend UPN = tostring(TargetResources.userPrincipalName)
+| where isnotempty(UserEnabled)
+| extend UserEnabledNewValue = parse_json(tostring(parse_json(UserEnabled)[0].newValue))[0] == true
+| project UPN, OperationName, Category, ActivityDisplayName, Result, UserEnabled, UserEnabledNewValue
