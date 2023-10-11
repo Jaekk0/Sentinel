@@ -1,0 +1,19 @@
+// This advanced hunting query detects CURL CVES mentioned at this blog post: https://daniel.haxx.se/blog/2023/10/11/curl-8-4-0/
+// Note: Time of publishing this query the CVE data might not be visible on all tenants. 
+let curlcve= dynamic(
+[
+"CVE-2023-38545", // SOCKS5 heap buffer overflow (HIGH)
+"CVE-2023-38546" // cookie injection with none file (LOW)
+ ]
+);
+DeviceTvmSoftwareVulnerabilitiesKB
+| where CveId in(curlcve)
+| join DeviceTvmSoftwareVulnerabilities on CveId
+| project-away CveId1, VulnerabilitySeverityLevel1, AffectedSoftware
+
+//Finds Curl software versions that are not updated to the latest version 8.4.0 (October 11, 2023)
+//More information: https://daniel.haxx.se/blog/2023/10/11/curl-8-4-0/
+DeviceTvmSoftwareInventory 
+| where SoftwareName has "curl"
+| where SoftwareVersion !startswith "8.4"
+| project DeviceName, OSVersion, SoftwareName, SoftwareVersion
