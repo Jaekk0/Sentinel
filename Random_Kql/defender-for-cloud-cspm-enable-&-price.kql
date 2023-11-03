@@ -1,0 +1,30 @@
+//List all Azure resources in resource group level where CSPM solution is enabled. 
+//Calculate price based on 5€/per asset 
+resources
+| extend vmCountForCspm = iff(type in ("microsoft.compute/virtualmachines","microsoft.classiccompute/virtualmachines"), 1 , 0)
+| extend vmssCountForCspm = iff(type == "microsoft.compute/virtualmachinescalesets" and sku != "" and sku.capacity != "", toint(sku.capacity), 0)
+| extend storageAccountCount = iff(type == "microsoft.storage/storageaccounts", 1 , 0)
+| extend ossDatabaseCount = iff(type in("microsoft.dbforpostgresql/servers", "microsoft.dbformysql/servers", "microsoft.dbformariadb/servers"), 1, 0)
+| extend sqlServersCount = iff(type =~ "microsoft.sql/servers" or type =~ "microsoft.sql/managedinstances", 1 , 0)
+| extend synapseServersCount = iff(type =~ "microsoft.synapse/workspaces ", 1 , 0)
+| extend cspmCount = vmCountForCspm + vmssCountForCspm + storageAccountCount + ossDatabaseCount + sqlServersCount + synapseServersCount
+| summarize sum(storageAccountCount), sum(ossDatabaseCount), sum(sqlServersCount), sum(cspmCount) by subscriptionId, resourceGroup//, tostring(tags["provider"])
+| where sum_storageAccountCount > 0 or sum_ossDatabaseCount > 0 or sum_sqlServersCount > 0 or sum_cspmCount > 0 
+| join  kind=inner  
+    (
+resources
+    | extend vmCountForCspmTotal = iff(type in ("microsoft.compute/virtualmachines ", "microsoft.classiccompute/virtualmachines"), 1 , 0)
+    | extend vmssCountForCspmTotal = iff(type == "microsoft.compute/virtualmachinescalesets" and sku != "" and sku.capacity != "", toint(sku.capacity), 0)
+    | extend storageAccountCountTotal = iff(type == "microsoft.storage/storageaccounts", 1 , 0)
+    | extend ossDatabaseCountTotal = iff(type in("microsoft.dbforpostgresql/servers", "microsoft.dbformysql/servers", "microsoft.dbformariadb/servers") and sku.tier !contains("basic"), 1, 0)
+    | extend sqlServersCountTotal = iff((type =~ "microsoft.sql/servers" and kind !contains("analytics")) or type =~ "microsoft.sql/managedinstances", 1 , 0)
+    | extend synapseServersCountTotal = iff(type =~ "microsoft.synapse/workspaces ", 1 , 0)
+    | extend cspmCountTotal = vmCountForCspmTotal + vmssCountForCspmTotal + storageAccountCountTotal + ossDatabaseCountTotal + sqlServersCountTotal + synapseServersCountTotal 
+    | summarize sum(storageAccountCountTotal), sum(ossDatabaseCountTotal), sum(sqlServersCountTotal), sum(cspmCountTotal) by subscriptionId
+    | where sum_storageAccountCountTotal > 0 or sum_ossDatabaseCountTotal > 0 or sum_sqlServersCountTotal > 0 or sum_cspmCountTotal > 0
+    ) on  subscriptionId
+| extend CspmRatio = case(sum_cspmCountTotal == 0, 0.0, todouble(sum_cspmCount) / todouble(sum_cspmCountTotal))
+| project subscriptionId, resourceGroup, CspmInRg = sum_cspmCount, TotalCspmInSub = sum_cspmCountTotal, CspmRatio = round(CspmRatio, 4), CspmPricingFull = 5
+| extend CspmEstimatedPriceFull = CspmPricingFull * CspmInRg, 0
+| summarize CspmEstimatedPriceFull = sum(CspmEstimatedPriceFull), CspmInRg = sum(CspmInRg) by Subscription = subscriptionId
+| extend DefenderCSPM = iff(CspmInRg != 0, CspmEstimatedPriceFull, 0)
