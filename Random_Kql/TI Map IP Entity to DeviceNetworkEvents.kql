@@ -30,9 +30,3 @@ IP_Indicators
   // Select the desired output fields
   | project DeviceNetworkEvents_TimeGenerated, DeviceName, LocalIP, InitiatingProcessAccountDomain, InitiatingProcessAccountUpn, InitiatingProcessCommandLine, InitiatingProcessFolderPath, Protocol, Url, ExpirationDateTime, ConfidenceScore,
     TI_ipEntity, RemoteIP, NetworkIP, NetworkDestinationIP, NetworkSourceIP, EmailSourceIpAddress, Type
-
-    DeviceNetworkEvents
-    | where RemoteIP == "8.8.8.8"
-
-    ThreatIntelligenceIndicator
-    | search "8.8.8.8"
