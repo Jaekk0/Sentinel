@@ -1,0 +1,4 @@
+//See Domain Controllers from Critical Asset management
+ExposureGraphNodes
+| where parse_json(NodeProperties).rawData.criticalityLevel.ruleNames[0] == 'Domain Controllers'
+| project NodeName
