@@ -1,3 +1,5 @@
+//Use this query to do estimate for the Sentinel solutions that UEBA uses
+//Full list of UEBA data sources: https://learn.microsoft.com/en-us/azure/sentinel/ueba-reference#ueba-data-sources
 Usage
 | where TimeGenerated > ago(30d)
 | where DataType in ("SigninLogs", "AuditLogs", "AzureActivity", "SecurityEvent", "IdentityLogonEvents", "IdentityDirectoryEvents", "IdentityQueryEvents")//Data Sources for UEBA
@@ -5,9 +7,10 @@ Usage
 | extend UEBAGB = 0.1*['Table Size'] //UEBA estimation
 | order by UEBAGB desc
 
-
+//Use this query to calculate the UEBA tables cost
+//Anomalies table is not 100% for UEBA usage: https://learn.microsoft.com/en-us/azure/sentinel/soc-ml-anomalies#ueba-anomalies
 Usage
 | where TimeGenerated > ago(30d)
-| where DataType in ("IdentityInfo", "UserPeerAnalytics","Anomalies")//Data Sources for UEBA
+| where DataType in ("IdentityInfo", "UserPeerAnalytics","Anomalies", "BehaviorAnalytics")//Data Sources for UEBA
 | summarize ['Table Size'] =sum(Quantity) / 1000. by DataType
 | order by ['Table Size'] desc
