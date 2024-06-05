@@ -1,5 +1,6 @@
 //Use this query to do estimate for the Sentinel solutions that UEBA uses
 //Full list of UEBA data sources: https://learn.microsoft.com/en-us/azure/sentinel/ueba-reference#ueba-data-sources
+//Typically UEBA will cost 10% of the data ingestion of below tables.
 Usage
 | where TimeGenerated > ago(30d)
 | where DataType in ("SigninLogs", "AuditLogs", "AzureActivity", "SecurityEvent", "IdentityLogonEvents", "IdentityDirectoryEvents", "IdentityQueryEvents")//Data Sources for UEBA
