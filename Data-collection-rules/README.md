@@ -1,3 +1,6 @@
+More detailed guide how to ingest and filter/split logs into Sentinel custom tables (basic tier) using workspace transformations: 
+https://www.linkedin.com/pulse/ingest-filtersplit-entra-id-logs-sentinel-custom-tables-marko-lauren-kqqdf
+
 Create the table you want to get the schema
 tableCreator.ps1
 - a tool to capture Sentinel table SCHEMA and create new table with same schema!
