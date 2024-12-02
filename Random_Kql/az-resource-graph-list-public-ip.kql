@@ -4,4 +4,8 @@ resources
 | where type == "microsoft.network/publicipaddresses"
 | mv-expand todynamic(properties)
 | where isnotempty(properties.ipAddress)
-| project ['id'], name, location, resourceGroup, subscriptionId, properties.ipAddress, ['tags']
+| extend AzurePublicIP = tostring(properties.ipAddress)
+| project ['id'], name, location, resourceGroup, subscriptionId, properties.ipAddress, AzurePublicIP, ['tags']
+//| summarize count(AzurePublicIP) 
+//| summarize count() by AzurePublicIP 
+//| distinct AzurePublicIP
